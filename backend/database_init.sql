@@ -30,10 +30,13 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password VARCHAR(100) NOT NULL,
     phone VARCHAR(20) NULL,
     role ENUM('admin', 'user') DEFAULT 'user',
+    is_delete BOOLEAN DEFAULT FALSE COMMENT '逻辑删除标记',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_username (username),
     INDEX idx_email (email),
-    INDEX idx_role (role)
+    INDEX idx_role (role),
+    INDEX idx_is_delete (is_delete)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 文档表
@@ -43,9 +46,12 @@ CREATE TABLE IF NOT EXISTS documents (
     original_filename VARCHAR(255) NOT NULL,
     stored_path VARCHAR(255) NOT NULL,
     milvus_collection_name VARCHAR(100) NOT NULL,
+    is_delete BOOLEAN DEFAULT FALSE COMMENT '逻辑删除标记',
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_user_id (user_id),
     INDEX idx_milvus_collection_name (milvus_collection_name),
+    INDEX idx_is_delete (is_delete),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

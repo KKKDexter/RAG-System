@@ -109,9 +109,33 @@ export const ragAPI = {
     })
   },
   
+  // 获取可用的embedding模型列表
+  getEmbeddingModels() {
+    return api.get('/v1/rag/embedding-models')
+  },
+  
   // 获取文档列表
   getDocuments(params) {
     return api.get('/v1/rag/documents', { params })
+  },
+  
+  // 获取单个文档
+  getDocument(id) {
+    return api.get(`/v1/rag/documents/${id}`)
+  },
+  
+  // 更新文档
+  updateDocument(id, data) {
+    return api.put(`/v1/rag/documents/${id}`, data)
+  },
+  
+  // 更新文档文件
+  updateDocumentFile(id, formData) {
+    return api.put(`/v1/rag/documents/${id}/file`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
   },
   
   // 删除文档
@@ -165,24 +189,6 @@ export const adminAPI = {
   // 获取系统日志
   getSystemLogs(params) {
     return api.get('/v1/admin/logs', { params })
-  }
-}
-
-// 统计数据相关API
-export const statsAPI = {
-  // 获取仪表盘数据
-  getDashboardStats() {
-    return api.get('/v1/stats/dashboard')
-  },
-  
-  // 获取文档统计
-  getDocumentStats(params) {
-    return api.get('/v1/stats/documents', { params })
-  },
-  
-  // 获取问答统计
-  getQAStats(params) {
-    return api.get('/v1/stats/qa', { params })
   }
 }
 

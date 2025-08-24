@@ -75,7 +75,56 @@ def create_user_collection(user_id: int) -> str:
         logger.error(f"创建集合 {collection_name} 失败: {str(e)}")
         raise
 
-# 搜索相似向量
+# 获取或创建Milvus集合
+def get_milvus_collection(collection_name: str) -> Collection:
+    logger.info(f"获取Milvus集合: {collection_name}")
+    
+    try:
+        if not utility.has_collection(collection_name):
+            # 如果集合不存在，创建一个新的
+            logger.debug(f"集合 {collection_name} 不存在，创建新集合")
+            fields = [
+                FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=100),
+                FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
+                FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+            ]
+            
+            schema = CollectionSchema(fields, description=f"Collection for {collection_name}")
+            collection = Collection(name=collection_name, schema=schema)
+            
+            # 创建索引
+            index_params = {
+                "index_type": "IVF_FLAT",
+                "metric_type": "L2",
+                "params": {"nlist": 128}
+            }
+            collection.create_index(field_name="vector", index_params=index_params)
+            logger.info(f"集合 {collection_name} 创建成功")
+        else:
+            collection = Collection(name=collection_name)
+            logger.debug(f"集合 {collection_name} 已存在")
+        
+        return collection
+    except Exception as e:
+        logger.error(f"获取集合 {collection_name} 失败: {str(e)}")
+        raise
+
+# 删除Milvus集合
+def drop_collection(collection_name: str) -> bool:
+    logger.info(f"删除Milvus集合: {collection_name}")
+    
+    try:
+        if utility.has_collection(collection_name):
+            utility.drop_collection(collection_name)
+            logger.info(f"集合 {collection_name} 删除成功")
+            return True
+        else:
+            logger.warning(f"集合 {collection_name} 不存在，无需删除")
+            return False
+    except Exception as e:
+        logger.error(f"删除集合 {collection_name} 失败: {str(e)}")
+        raise
 def search_similar_vectors(collection_name: str, query_vector: list, limit: int = 5) -> list:
     logger.info(f"在Milvus集合 {collection_name} 中搜索相似向量，限制结果数: {limit}")
     

@@ -28,11 +28,16 @@
           <!-- 系统消息 -->
           <div v-else class="message system-message">
             <div class="message-avatar">
-              <el-avatar icon="Bot" />
+              <el-avatar><el-icon><ChatDotRound /></el-icon></el-avatar>
             </div>
             <div class="message-content">
               <div class="message-text">{{ message.content }}</div>
-              <div class="message-time">{{ message.time }}</div>
+              <div class="message-meta">
+                <span class="message-time">{{ message.time }}</span>
+                <span v-if="message.modelInfo" class="model-info">
+                  由 {{ message.modelInfo }} 生成
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -58,46 +63,76 @@
           @keydown.enter.exact="handleAskQuestion"
           @keydown.enter.shift="handleNewLine"
         ></textarea>
-        <div style="text-align: right; margin-top: 5px; color: #999; font-size: 12px;">
-          {{ currentQuestion.length }}/1000
-        </div>
         
-        <div class="input-actions">
-          <el-button type="primary" @click="handleAskQuestion" :loading="isLoading" :disabled="!currentQuestion.trim()">
-            <el-icon><Message /></el-icon>发送
-          </el-button>
-          <el-button @click="clearChat" v-if="messages.length > 0">
-            <el-icon><Delete /></el-icon>清空
-          </el-button>
+        <!-- Chat模型选择和操作按钮 -->
+        <div class="input-actions" style="margin-top: 10px;">
+          <div class="model-selector">
+            <span style="font-size: 14px; color: #606266; margin-right: 10px;">Chat模型:</span>
+            <el-select 
+              v-model="selectedChatModelId" 
+              placeholder="选择模型"
+              clearable
+              size="small"
+              style="width: 200px;"
+              @change="handleChatModelChange"
+            >
+              <el-option 
+                v-for="model in chatModels" 
+                :key="model.id" 
+                :label="model.name" 
+                :value="model.id"
+              />
+            </el-select>
+          </div>
+          
+          <div class="action-buttons">
+            <el-button type="primary" @click="handleAskQuestion" :loading="isLoading" :disabled="!currentQuestion.trim()">
+              <el-icon><Message /></el-icon>发送
+            </el-button>
+            <el-button @click="clearChat" v-if="messages.length > 0">
+              <el-icon><Delete /></el-icon>清空
+            </el-button>
+          </div>
         </div>
       </div>
     </div>
     
     <!-- 提示信息 -->
-    <el-card class="tips-card">
-      <template #header>
-        <div class="card-header">
-          <span>使用提示</span>
+    <div class="tips-container">
+      <div class="tips-header" @click="toggleTips">
+        <span>💡 使用提示</span>
+        <el-icon class="toggle-icon" :class="{ rotated: showTips }">
+          <ArrowDown />
+        </el-icon>
+      </div>
+      
+      <el-collapse-transition>
+        <div v-show="showTips" class="tips-content">
+          <ul class="tips-list">
+            <li>1. 确保您已上传相关文档到知识库</li>
+            <li>2. 可以选择不同的大模型来获取不同的回答风格</li>
+            <li>3. 提问越具体，得到的回答越准确</li>
+            <li>4. 您可以基于之前的回答继续提问</li>
+            <li>5. Shift + Enter 可以输入换行符</li>
+          </ul>
         </div>
-      </template>
-      <ul class="tips-list">
-        <li>1. 确保您已上传相关文档到知识库</li>
-        <li>2. 提问越具体，得到的回答越准确</li>
-        <li>3. 您可以基于之前的回答继续提问</li>
-        <li>4. Shift + Enter 可以输入换行符</li>
-      </ul>
-    </el-card>
+      </el-collapse-transition>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Message, Delete, Loading } from '@element-plus/icons-vue'
-import { ragAPI } from '../utils/api.js'
+import { Message, Delete, Loading, ChatDotRound, ArrowDown } from '@element-plus/icons-vue'
+import { ragAPI, llmAPI } from '../utils/api.js'
 
 // 用户信息
 const userInfo = ref(null)
+
+// 模型选择
+const chatModels = ref([])
+const selectedChatModelId = ref(null)
 
 // 聊天相关
 const currentQuestion = ref('')
@@ -105,21 +140,42 @@ const messages = ref([])
 const isLoading = ref(false)
 const chatMessagesRef = ref()
 
+// 使用提示显示状态
+const showTips = ref(false)
+
 // 初始化
 onMounted(() => {
-  console.log('QASystem组件已加载');
-  console.log('currentQuestion初始值:', currentQuestion.value);
-  
   // 从本地存储获取用户信息
   const storedUserInfo = localStorage.getItem('userInfo')
   if (storedUserInfo) {
     userInfo.value = JSON.parse(storedUserInfo)
-    console.log('用户信息:', userInfo.value);
   }
   
-  // 可以从本地存储加载历史聊天记录（如果实现了的话）
-  // loadChatHistory()
+  // 加载模型列表
+  fetchChatModels()
 })
+
+// 获取Chat模型列表
+const fetchChatModels = async () => {
+  try {
+    const models = await llmAPI.getModelsByType('chat')
+    chatModels.value = models.map(model => ({
+      id: model.id,
+      name: model.name,
+      is_local: !model.api_key || model.api_key === 'None'
+    }))
+  } catch (error) {
+    console.error('获取Chat模型列表失败:', error)
+  }
+}
+
+// 处理Chat模型变更
+const handleChatModelChange = (modelId) => {
+  const selectedModel = chatModels.value.find(m => m.id === modelId)
+  if (selectedModel) {
+    ElMessage.success(`已选择Chat模型: ${selectedModel.name}`)
+  }
+}
 
 // 处理提问
 const handleAskQuestion = async () => {
@@ -152,10 +208,27 @@ const handleAskQuestion = async () => {
   try {
     isLoading.value = true
     
-    // 发送提问请求
-    const response = await ragAPI.askQuestion({
+    // 构建请求参数
+    const requestData = {
       question: question
-    })
+    }
+    
+    // 如果选择了Chat模型，添加到请求中
+    if (selectedChatModelId.value) {
+      requestData.chat_model_id = selectedChatModelId.value
+    }
+    
+    // 发送提问请求
+    const response = await ragAPI.askQuestion(requestData)
+    
+    // 获取使用的模型信息
+    let modelInfo = ''
+    if (selectedChatModelId.value) {
+      const chatModel = chatModels.value.find(m => m.id === selectedChatModelId.value)
+      if (chatModel) {
+        modelInfo = chatModel.name
+      }
+    }
     
     // 添加系统回答到聊天列表
     const answerTime = new Date().toLocaleTimeString('zh-CN', {
@@ -167,6 +240,7 @@ const handleAskQuestion = async () => {
       role: 'system',
       content: response.answer,
       time: answerTime,
+      modelInfo: modelInfo || '默认模型',
       // 这里可以根据实际API返回添加参考文档信息
       // references: response.references || []
     })
@@ -183,7 +257,8 @@ const handleAskQuestion = async () => {
       time: new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
         minute: '2-digit'
-      })
+      }),
+      modelInfo: '系统提示'
     })
     // 错误处理已在api.ts中完成
   } finally {
@@ -199,8 +274,6 @@ const handleAskQuestion = async () => {
 const handleInput = (event) => {
   // 确保输入内容被正确更新
   currentQuestion.value = event.target.value
-  console.log('输入事件触发:', currentQuestion.value);
-  console.log('事件对象:', event);
 }
 
 // 处理换行
@@ -237,6 +310,11 @@ const clearChat = () => {
     .catch(() => {
       ElMessage.info('已取消清空')
     })
+}
+
+// 切换使用提示显示状态
+const toggleTips = () => {
+  showTips.value = !showTips.value
 }
 
 // 滚动到底部
@@ -290,6 +368,27 @@ const saveChatHistory = () => {
   color: #666;
 }
 
+/* 模型选择卡片样式 */
+.model-selection-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.model-selection-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
 /* 聊天容器样式 */
 .chat-container {
   display: flex;
@@ -306,7 +405,7 @@ const saveChatHistory = () => {
 /* 为小屏幕调整聊天容器高度 */
 @media (max-width: 768px) {
   .chat-container {
-    height: calc(100vh - 320px);
+    height: calc(100vh - 420px);
   }
 }
 
@@ -385,6 +484,22 @@ const saveChatHistory = () => {
   margin-top: 5px;
 }
 
+/* 系统消息元信息样式 */
+.message-meta {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #909399;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.model-info {
+  font-style: italic;
+  color: #67c23a;
+  font-size: 11px;
+}
+
 /* 加载消息样式 */
 .loading-message {
   display: flex;
@@ -407,36 +522,109 @@ const saveChatHistory = () => {
   min-height: 120px;
 }
 
+/* 输入区域动作样式 */
 .input-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.model-selector {
+  display: flex;
+  align-items: center;
+}
+
+.action-buttons {
+  display: flex;
   gap: 10px;
 }
 
-/* 提示卡片样式 */
-.tips-card {
-  background-color: #f0f9ff;
-  border-color: #bae7ff;
+/* 提示容器样式 */
+.tips-container {
+  margin-top: 20px;
 }
 
+/* 提示头部样式 */
+.tips-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae7ff;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  color: #409eff;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tips-header:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #cce7f0 100%);
+  border-color: #91d5ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-icon {
+  transition: transform 0.3s ease;
+  color: #409eff;
+}
+
+.toggle-icon.rotated {
+  transform: rotate(180deg);
+}
+
+/* 提示内容样式 */
+.tips-content {
+  margin-top: 8px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
 .tips-list {
   margin: 0;
   padding-left: 20px;
 }
 
 .tips-list li {
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   color: #666;
+  line-height: 1.5;
 }
 
 .tips-list li:last-child {
   margin-bottom: 0;
 }
 
+/* Element Plus 组件样式优化 */
+.el-select {
+  width: 100%;
+}
+
+.el-form-item {
+  margin-bottom: 0;
+}
+
+.el-form-item__label {
+  font-weight: 500;
+  color: #303133;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .qa-system {
+    padding: 15px;
+  }
+  
   .chat-container {
-    height: calc(100vh - 320px);
+    height: calc(100vh - 450px);
   }
   
   .message-content {
@@ -450,5 +638,41 @@ const saveChatHistory = () => {
   .input-actions .el-button {
     width: 100%;
   }
+  
+  .model-selection-card .el-col {
+    margin-bottom: 15px;
+  }
+  
+  .message-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+}
+
+/* 输入框样式优化 */
+textarea:focus {
+  outline: none;
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+/* 滚动条样式 */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>

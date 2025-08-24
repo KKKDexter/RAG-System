@@ -55,7 +55,7 @@
     </aside>
     
     <!-- 主内容区域 -->
-    <main class="main-content">
+    <main class="main-content" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <!-- 顶部导航栏 -->
       <header class="top-nav">
         <div class="nav-left">
@@ -225,19 +225,41 @@ const fetchUserInfo = async () => {
 
 .el-menu-vertical .el-menu-item,
 .el-menu-vertical .el-sub-menu__title {
-  color: #ecf0f1;
+  color: #ecf0f1 !important;
   height: 48px;
   line-height: 48px;
 }
 
 .el-menu-vertical .el-menu-item:hover,
 .el-menu-vertical .el-sub-menu__title:hover {
-  background-color: #34495e;
+  background-color: #34495e !important;
+  color: #ecf0f1 !important;
 }
 
 .el-menu-vertical .el-menu-item.is-active {
-  background-color: #1abc9c;
-  color: white;
+  background-color: #1abc9c !important;
+  color: white !important;
+}
+
+/* 确保子菜单标题中的span元素也使用正确的颜色 */
+.el-menu-vertical .el-sub-menu__title span {
+  color: #ecf0f1 !important;
+}
+
+/* 子菜单项样式 */
+.el-menu-vertical .el-sub-menu .el-menu-item {
+  color: #ecf0f1 !important;
+  background-color: rgba(52, 73, 94, 0.5) !important;
+}
+
+.el-menu-vertical .el-sub-menu .el-menu-item:hover {
+  background-color: #34495e !important;
+  color: #ecf0f1 !important;
+}
+
+.el-menu-vertical .el-sub-menu .el-menu-item.is-active {
+  background-color: #1abc9c !important;
+  color: white !important;
 }
 
 /* 主内容区域样式 */
@@ -248,10 +270,22 @@ const fetchUserInfo = async () => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  width: calc(100vw - 240px);
+  max-width: calc(100vw - 240px);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.sidebar.collapsed + .main-content {
+/* 当侧边栏收缩时，调整主内容区域的左边距 */
+.main-layout:has(.sidebar.collapsed) .main-content {
   margin-left: 60px;
+}
+
+/* 如果浏览器不支持:has选择器，使用JavaScript动态类名 */
+.main-content.sidebar-collapsed {
+  margin-left: 60px;
+  width: calc(100vw - 60px);
+  max-width: calc(100vw - 60px);
 }
 
 /* 顶部导航栏样式 */
@@ -287,9 +321,16 @@ const fetchUserInfo = async () => {
 /* 内容区域样式 */
 .content {
   flex: 1;
-  padding: 20px;
+  padding: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   background-color: #f5f7fa;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* 严格限制内容不超出可视区域 */
+  contain: layout;
+  position: relative;
 }
 
 /* 响应式设计 */
@@ -310,5 +351,43 @@ const fetchUserInfo = async () => {
   .mobile-menu-btn {
     display: block;
   }
+}
+
+/* Element Plus 菜单组件深度样式覆盖 */
+:deep(.el-menu) {
+  background-color: transparent !important;
+  border-right: none !important;
+}
+
+:deep(.el-menu-item),
+:deep(.el-sub-menu__title) {
+  color: #ecf0f1 !important;
+  background-color: transparent !important;
+}
+
+:deep(.el-menu-item:hover),
+:deep(.el-sub-menu__title:hover) {
+  background-color: #34495e !important;
+  color: #ecf0f1 !important;
+}
+
+:deep(.el-menu-item.is-active) {
+  background-color: #1abc9c !important;
+  color: white !important;
+}
+
+:deep(.el-sub-menu .el-menu-item) {
+  background-color: rgba(52, 73, 94, 0.5) !important;
+  color: #ecf0f1 !important;
+}
+
+:deep(.el-sub-menu .el-menu-item:hover) {
+  background-color: #34495e !important;
+  color: #ecf0f1 !important;
+}
+
+:deep(.el-sub-menu .el-menu-item.is-active) {
+  background-color: #1abc9c !important;
+  color: white !important;
 }
 </style>

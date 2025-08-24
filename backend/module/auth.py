@@ -37,7 +37,10 @@ def get_password_hash(password: str) -> str:
 
 # 根据用户名获取用户
 def get_user(db: Session, username: str) -> Optional[User]:
-    return db.query(User).filter(User.username == username).first()
+    return db.query(User).filter(
+        User.username == username,
+        User.is_delete == False
+    ).first()
 
 # 用户认证
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:

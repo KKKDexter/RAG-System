@@ -39,75 +39,85 @@
       </el-button>
     </div>
     
-    <!-- 用户列表 -->
-    <el-table
-      v-loading="loading"
-      :data="usersData"
-      style="width: 100%; margin-top: 20px"
-      border
-    >
-      <el-table-column type="index" width="50" />
+    <!-- 表格和分页容器 -->
+    <div class="table-and-pagination-container">
+      <!-- 表格容器 -->
+      <div class="table-container">
+        <!-- 用户列表 -->
+        <el-table
+          v-loading="loading"
+          :data="usersData"
+          border
+          style="width: 100%; max-width: 100%;"
+          :table-layout="'fixed'"
+          :show-overflow-tooltip="true"
+          :size="'default'"
+          :max-height="tableHeight"
+        >
+          <el-table-column type="index" width="60" />
+          
+          <el-table-column prop="username" label="用户名" sortable show-overflow-tooltip>
+            <template #default="scope">
+              <div class="user-info">
+                <el-avatar size="small" style="margin-right: 10px">{{ scope.row.username?.charAt(0).toUpperCase() }}</el-avatar>
+                <span>{{ scope.row.username }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          
+          <el-table-column prop="email" label="邮箱" sortable show-overflow-tooltip />
+          
+          <el-table-column prop="phone" label="手机号" show-overflow-tooltip />
+          
+          <el-table-column prop="role" label="角色" sortable>
+            <template #default="scope">
+              <el-tag :type="scope.row.role === 'admin' ? 'primary' : 'success'">
+                {{ scope.row.role === 'admin' ? '管理员' : '普通用户' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          
+          <el-table-column prop="created_at" label="创建时间" sortable show-overflow-tooltip>
+            <template #default="scope">
+              {{ formatDate(scope.row.created_at) }}
+            </template>
+          </el-table-column>
+          
+          <el-table-column label="操作" width="160" fixed="right">
+            <template #default="scope">
+              <el-button
+                type="primary"
+                size="small"
+                @click="handleEditUser(scope.row)"
+                :disabled="scope.row.id === currentUserId"
+              >
+                编辑
+              </el-button>
+              <el-button
+                type="danger"
+                size="small"
+                @click="handleDeleteUser(scope.row)"
+                :disabled="scope.row.id === currentUserId"
+              >
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
       
-      <el-table-column prop="username" label="用户名" width="180" sortable>
-        <template #default="scope">
-          <div class="user-info">
-            <el-avatar size="small" style="margin-right: 10px">{{ scope.row.username?.charAt(0).toUpperCase() }}</el-avatar>
-            <span>{{ scope.row.username }}</span>
-          </div>
-        </template>
-      </el-table-column>
-      
-      <el-table-column prop="email" label="邮箱" width="250" sortable />
-      
-      <el-table-column prop="phone" label="手机号" width="150" />
-      
-      <el-table-column prop="role" label="角色" width="120" sortable>
-        <template #default="scope">
-          <el-tag :type="scope.row.role === 'admin' ? 'primary' : 'success'">
-            {{ scope.row.role === 'admin' ? '管理员' : '普通用户' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      
-      <el-table-column prop="created_at" label="创建时间" width="200" sortable>
-        <template #default="scope">
-          {{ formatDate(scope.row.created_at) }}
-        </template>
-      </el-table-column>
-      
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="scope">
-          <el-button
-            type="primary"
-            size="small"
-            @click="handleEditUser(scope.row)"
-            :disabled="scope.row.id === currentUserId"
-          >
-            编辑
-          </el-button>
-          <el-button
-            type="danger"
-            size="small"
-            @click="handleDeleteUser(scope.row)"
-            :disabled="scope.row.id === currentUserId"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    
-    <!-- 分页 -->
-    <div class="pagination" style="margin-top: 20px">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="total"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
+      <!-- 分页 -->
+      <div class="pagination" style="margin-top: 0px !important; margin-bottom: 0 !important; padding-top: 12px; border-top: 1px solid #ebeef5; position: relative; z-index: 10;">
+        <el-pagination
+          :current-page="currentPage"
+          :page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
     </div>
     
     <!-- 新增/编辑用户对话框 -->
@@ -161,9 +171,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { adminAPI } from '../utils/api'
+import { Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { adminAPI } from '../utils/api.js'
 
 // 用户数据
 const users = ref([])
@@ -173,7 +184,10 @@ const roleFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const currentUserId = ref<number | null>(null)
+const currentUserId = ref(null)
+
+// 表格高度自适应
+const tableHeight = ref(400)
 
 // 计算当前页的用户数据
 const usersData = computed(() => {
@@ -253,6 +267,25 @@ const userRules = reactive({
   ]
 })
 
+// 计算表格最大高度
+const calculateTableHeight = () => {
+  const windowHeight = window.innerHeight
+  const headerHeight = 80 // 页面头部高度
+  const actionButtonsHeight = 55 // 操作按钮区域高度
+  const searchFilterHeight = 70 // 搜索筛选区域高度
+  const paginationHeight = 60 // 分页区域高度
+  const padding = 0 // 移除页面内边距
+  const containerPadding = 0 // 移除容器内边距
+  
+  const availableHeight = windowHeight - headerHeight - actionButtonsHeight - searchFilterHeight - paginationHeight - padding - containerPadding
+  tableHeight.value = Math.max(300, availableHeight) // 最小高度300px，作为最大高度使用
+}
+
+// 窗口大小变化监听
+const handleResize = () => {
+  calculateTableHeight()
+}
+
 // 初始化
 onMounted(() => {
   // 获取当前用户信息
@@ -262,8 +295,21 @@ onMounted(() => {
     currentUserId.value = userInfo.id
   }
   
+  // 计算表格高度
+  nextTick(() => {
+    calculateTableHeight()
+  })
+  
+  // 监听窗口大小变化
+  window.addEventListener('resize', handleResize)
+  
   // 加载用户列表
   loadUsers()
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 
 // 加载用户列表
@@ -442,11 +488,23 @@ const formatDate = (dateString) => {
 
 <style scoped>
 .user-management {
-  padding: 20px;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  position: relative;
+  margin: 0;
 }
 
 .page-header {
   margin-bottom: 20px;
+  flex-shrink: 0;
+  padding: 20px;
 }
 
 .page-header h1 {
@@ -461,12 +519,47 @@ const formatDate = (dateString) => {
 
 .action-buttons {
   margin-bottom: 15px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding: 0 20px;
 }
 
 .search-filter {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 0 20px;
+}
+
+.table-and-pagination-container {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.table-container {
+  overflow: hidden;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid #ebeef5;
+  min-height: 200px;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  box-sizing: border-box;
+  contain: layout;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
 }
 
 .user-info {
@@ -477,14 +570,191 @@ const formatDate = (dateString) => {
 .pagination {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  flex-shrink: 0;
+  padding: 12px 20px;
+  background-color: #fff;
+  border-top: 1px solid #ebeef5;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 强制移除所有可能的间距 */
+:deep(.el-table) + .pagination {
+  margin-top: 0 !important;
+}
+
+.table-and-pagination-container > .pagination {
+  margin-top: 0 !important;
+}
+
+/* 清除分页组件的所有间距 */
+.table-and-pagination-container .pagination {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* 表格样式优化 - 实现动态高度 */
+:deep(.el-table) {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse;
+  box-sizing: border-box;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 强制清除Element Plus表格包装器的默认间距 */
+:deep(.el-table__wrapper) {
+  max-width: 100%;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* 清除表格内部所有可能的间距 */
+:deep(.el-scrollbar) {
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:deep(.el-scrollbar__wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:deep(.el-scrollbar__view) {
+  margin: 0 !important;
+  padding: 0 !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+:deep(.el-table__inner-wrapper) {
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:deep(.el-table__header-wrapper) {
+  overflow-x: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+:deep(.el-table__body-wrapper) {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:deep(.el-table__fixed) {
+  max-width: 160px;
+}
+
+/* 强制所有表格列不超出指定宽度 */
+:deep(.el-table .el-table__cell) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  max-width: 100%;
+  word-break: break-all;
+}
+
+/* 确保表格头部也遵循宽度限制 */
+:deep(.el-table th) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* 确保表格行也遵循宽度限制 */
+:deep(.el-table td) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* 防止表格内容撑开容器 */
+:deep(.el-table colgroup col) {
+  box-sizing: border-box;
+}
+
+/* 强制表格内的所有元素都遵循宽度限制 */
+:deep(.el-table *) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* 确保表格包装器不会溢出 */
+:deep(.el-table__wrapper) {
+  max-width: 100%;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 操作列特殊处理 */
+:deep(.el-table__fixed-right) {
+  right: 0 !important;
+}
+
+/* 确保表格整体不会横向滚动出容器 */
+:deep(.el-scrollbar) {
+  max-width: 100%;
+}
+
+:deep(.el-scrollbar__wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* 表格单元格内容强制换行处理 */
+:deep(.el-table .cell) {
+  word-wrap: break-word;
+  word-break: break-all;
+  white-space: normal;
+  line-height: 1.5;
+  padding: 8px;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .user-management {
+    padding: 0;
+  }
+  
+  .page-header {
+    padding: 15px;
+  }
+  
+  .action-buttons {
+    padding: 0 15px;
+  }
+  
   .search-filter {
     flex-direction: column;
     align-items: flex-start;
+    padding: 0 15px;
+    margin-bottom: 15px;
   }
   
   .search-filter .el-input,
@@ -497,6 +767,70 @@ const formatDate = (dateString) => {
   
   .pagination {
     justify-content: center;
+    padding: 10px 15px;
+    margin-top: 0;
+    background-color: #fff;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .table-container {
+    /* 移动端也要充分利用可用空间 */
+    min-height: 150px;
+  }
+  
+  /* 移动端表格特殊优化 */
+  :deep(.el-table .el-table__cell) {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+  
+  /* 隐藏一些次要列 */
+  :deep(.el-table-column--created_at) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-container {
+    /* 小屏幕设备也要保持充分利用空间 */
+    min-height: 120px;
+  }
+  
+  .user-management {
+    padding: 0;
+  }
+  
+  .page-header {
+    padding: 10px;
+  }
+  
+  .action-buttons {
+    padding: 0 10px;
+  }
+  
+  .search-filter {
+    padding: 0 10px;
+    margin-bottom: 15px;
+  }
+  
+  .pagination {
+    padding: 8px 10px;
+    margin-top: 0;
+    background-color: #fff;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* 超小屏幕表格优化 */
+  :deep(.el-table .el-table__cell) {
+    padding: 6px 2px;
+    font-size: 11px;
+  }
+  
+  /* 隐藏更多列 */
+  :deep(.el-table-column--phone) {
+    display: none;
   }
 }
 </style>

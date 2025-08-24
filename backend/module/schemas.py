@@ -11,11 +11,22 @@ class UserCreate(BaseModel):
     phone: Optional[str] = None
     role: Optional[Role] = Role.user
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[Role] = None
+
 class UserOut(BaseModel):
     id: int
     username: str
     email: str
+    phone: Optional[str] = None
     role: Role
+    is_delete: bool
+    created_at: datetime
+    updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -32,10 +43,16 @@ class LoginRequest(BaseModel):
     password: str
 
 # 文档相关模型
+class DocumentUpdate(BaseModel):
+    original_filename: Optional[str] = None
+
 class DocumentOut(BaseModel):
     id: int
+    user_id: int
     original_filename: str
+    is_delete: bool
     uploaded_at: datetime
+    updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,6 +88,8 @@ class LLMModelOut(BaseModel):
 # 问答相关模型
 class AskRequest(BaseModel):
     question: str
+    chat_model_id: Optional[int] = None  # 可选的Chat模型ID
+    embedding_model_id: Optional[int] = None  # 可选的Embedding模型ID
 
 class AskResponse(BaseModel):
     answer: str
