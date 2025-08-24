@@ -6,6 +6,7 @@ import DocumentManagement from '../views/DocumentManagement.vue'
 import QASystem from '../views/QASystem.vue'
 import UserManagement from '../views/UserManagement.vue'
 import SystemSettings from '../views/SystemSettings.vue'
+import LLMManagement from '../views/LLMManagement.vue'
 
 const routes = [
   {
@@ -50,6 +51,14 @@ const routes = [
         path: 'admin/settings',
         name: 'SystemSettings',
         component: SystemSettings,
+        meta: {
+          requiresAdmin: true
+        }
+      },
+      {
+        path: 'admin/llm',
+        name: 'LLMManagement',
+        component: LLMManagement,
         meta: {
           requiresAdmin: true
         }

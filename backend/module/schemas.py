@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from .models import Role, ModelType
 
 # 用户相关模型
@@ -17,8 +17,7 @@ class UserOut(BaseModel):
     email: str
     role: Role
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # 认证相关模型
 class Token(BaseModel):
@@ -28,14 +27,17 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 # 文档相关模型
 class DocumentOut(BaseModel):
     id: int
     original_filename: str
     uploaded_at: datetime
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # 大模型相关模型
 class LLMModelCreate(BaseModel):
@@ -64,8 +66,7 @@ class LLMModelOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # 问答相关模型
 class AskRequest(BaseModel):

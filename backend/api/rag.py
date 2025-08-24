@@ -15,8 +15,8 @@ if env == 'prod':
     from config.prod import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL, RERANK_MODEL_API_KEY, RERANK_MODEL_NAME, RERANK_MODEL_URL
 else:
     from config.dev import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL, RERANK_MODEL_API_KEY, RERANK_MODEL_NAME, RERANK_MODEL_URL
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.chat_models import ChatOpenAI
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.chat_models import ChatOpenAI
 
 # 导入日志配置
 from logger_config import get_logger
@@ -24,7 +24,7 @@ logger = get_logger("rag_router")
 
 # 创建路由
 router = APIRouter(
-    prefix="/api/v1/rag",
+    prefix="/v1/rag",
     tags=["RAG"],
 )
 
@@ -43,8 +43,7 @@ async def upload_document(
     try:
         # 保存文件
         logger.debug(f"保存上传文件: {file.filename}")
-        file_content = await file.read()
-        file_path, file_extension = save_uploaded_file(file_content, upload_dir)
+        file_path, file_extension = await save_uploaded_file(file, upload_dir)
         
         # 创建文档记录
         logger.debug(f"创建文档数据库记录: {file.filename}")
@@ -66,7 +65,10 @@ async def upload_document(
         # 获取用户的Milvus集合
         logger.debug(f"加载Milvus集合: {document.milvus_collection_name}")
         from pymilvus import Collection
-        collection = Collection(name=document.milvus_collection_name)
+        from module.milvus_service import create_user_collection
+        # 确保集合存在
+        collection_name = create_user_collection(current_user.id)
+        collection = Collection(name=collection_name)
         collection.load()
         
         # 准备数据

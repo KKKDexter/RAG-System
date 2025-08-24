@@ -1,8 +1,9 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Enum, Boolean
 from sqlalchemy.orm import relationship
-from database import Base
+from .database import Base
 from enum import Enum as PyEnum
+from datetime import datetime
 
 # 用户角色枚举
 class Role(PyEnum):

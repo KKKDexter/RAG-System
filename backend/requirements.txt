@@ -1,15 +1,41 @@
-fastapi==0.95.2
-uvicorn==0.22.0
-pydantic==2.0.3
-sqlalchemy==2.0.19
-passlib==1.7.4
-python-jose==3.3.0
-python-multipart==0.0.6
-tiktoken==0.4.0
-langchain==0.0.240
-pymilvus==2.3.0
-redis==4.5.5
-docx2txt==0.8
-PyPDF2==3.0.1
-python-dotenv==1.0.0
-loguru
+# Web 框架与服务器
+fastapi>=0.110.0,<0.115.0  # 使用稳定且完全支持 Pydantic V2 的版本
+uvicorn[standard]>=0.27.0  # 包含推荐的依赖 (uvloop, httptools)，性能更好
+
+# 核心依赖：Pydantic V2 (LangChain 和 FastAPI 都需要)
+pydantic>=2.6.0,<3.0.0     # 使用稳定的 V2 版本，避开早期有问题的 2.0.x/2.1.x
+
+# LangChain (必须升级到支持 Pydantic V2 的版本)
+langchain>=0.1.16,<0.3.0   # 选择明确支持 Pydantic V2 的现代版本
+langchain-community>=0.0.30 # 常用的集成包
+langchain-core>=0.1.47     # 核心包 (如果需要)
+# langchain-openai        # 如果使用 OpenAI, 可以单独添加
+
+# 数据库与 ORM
+sqlalchemy>=2.0.0,<3.0.0   # 保持在 2.x 系列，与你的代码兼容
+# alembic>=1.13.0         # 如果需要数据库迁移，建议添加
+
+# 安全与认证
+passlib[bcrypt]>=1.7.4     # 明确指定需要 bcrypt 支持
+python-jose[cryptography]>=3.3.0 # 明确指定需要 cryptography 支持，用于 JWT
+python-multipart>=0.0.6    # 用于处理文件上传
+
+# 向量数据库
+pymilvus>=2.3.0,<3.0.0     # 保持兼容性
+
+# 缓存
+redis>=4.5.5,<5.0.0        # 保持在 4.x 系列
+
+# 文档处理
+tiktoken>=0.4.0,<0.6.0     # OpenAI 的 tokenizer
+PyPDF2>=3.0.1,<4.0.0       # 处理 PDF
+docx2txt>=0.8,<0.9         # 处理 DOCX
+# python-docx>=0.8.11      # 更强大的 DOCX 库 (可选替代 docx2txt)
+
+# 配置与日志
+python-dotenv>=1.0.0       # 环境变量
+loguru>=0.7.0              # 现代化日志库
+
+# 建议添加的通用工具
+# requests>=2.31.0         # HTTP 请求 (很多库依赖它)
+# httpx>=0.25.0            # 异步 HTTP 客户端 (LangChain 常用)

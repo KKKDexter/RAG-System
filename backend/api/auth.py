@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from module.database import get_db
 from module.models import User
-from module.schemas import UserOut, UserCreate, Token
+from module.schemas import UserOut, UserCreate, Token, LoginRequest
 from module.auth import (
     authenticate_user,
     create_access_token,
@@ -20,7 +20,7 @@ logger = get_logger("auth_router")
 
 # 创建路由
 router = APIRouter(
-    prefix="/api/v1/auth",
+    prefix="/v1/auth",
     tags=["认证"],
 )
 
@@ -68,27 +68,27 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 # 用户登录
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    logger.info(f"收到用户登录请求，用户名: {form_data.username}")
+def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    logger.info(f"收到用户登录请求，用户名: {login_data.username}")
     
     try:
-        user = authenticate_user(db, form_data.username, form_data.password)
+        user = authenticate_user(db, login_data.username, login_data.password)
         if not user:
-            logger.warning(f"用户登录失败：用户名 '{form_data.username}' 验证失败")
+            logger.warning(f"用户登录失败：用户名 '{login_data.username}' 验证失败")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        logger.debug(f"用户 {form_data.username} 验证成功，生成访问令牌")
+        logger.debug(f"用户 {login_data.username} 验证成功，生成访问令牌")
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": user.username},
             expires_delta=access_token_expires,
         )
         
-        logger.info(f"用户登录成功：{form_data.username}，用户ID: {user.id}")
+        logger.info(f"用户登录成功：{login_data.username}，用户ID: {user.id}")
         return {"access_token": access_token, "token_type": "bearer"}
     except HTTPException:
         # 已经在authenticate_user中处理了登录失败的日志

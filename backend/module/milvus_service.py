@@ -1,12 +1,14 @@
 import os
 from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
 
-# 根据环境变量动态导入配置
-env = os.environ.get('ENVIRONMENT', 'dev')
-if env == 'prod':
-    from config.prod import MILVUS_HOST, MILVUS_PORT, VECTOR_DIM, MILVUS_USERNAME, MILVUS_PASSWORD
-else:
-    from config.dev import MILVUS_HOST, MILVUS_PORT, VECTOR_DIM, MILVUS_USERNAME, MILVUS_PASSWORD
+# 根据环境动态获取配置
+current_env = os.getenv('ENVIRONMENT', 'dev')
+env_config = __import__(f"config.{current_env}", fromlist=["*"])
+MILVUS_HOST = env_config.MILVUS_HOST
+MILVUS_PORT = env_config.MILVUS_PORT
+VECTOR_DIM = env_config.VECTOR_DIM
+MILVUS_USERNAME = env_config.MILVUS_USERNAME
+MILVUS_PASSWORD = env_config.MILVUS_PASSWORD
 
 # 导入日志配置
 from logger_config import get_logger

@@ -45,6 +45,10 @@
               <el-icon><Cog /></el-icon>
               <span v-if="!isSidebarCollapsed">RAG系统管理</span>
             </el-menu-item>
+            <el-menu-item index="LLMManagement">
+              <el-icon><Brain /></el-icon>
+              <span v-if="!isSidebarCollapsed">大模型管理</span>
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
       </nav>

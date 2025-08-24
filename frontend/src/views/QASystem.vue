@@ -59,13 +59,14 @@
           :maxlength="1000"
           show-word-limit
           resize="none"
+          @input="handleInput"
           @keydown.enter.exact="handleAskQuestion"
           @keydown.enter.shift="handleNewLine"
         />
         
         <div class="input-actions">
           <el-button type="primary" @click="handleAskQuestion" :loading="isLoading" :disabled="!currentQuestion.trim()">
-            <el-icon><Send /></el-icon>发送
+            <el-icon><Message /></el-icon>发送
           </el-button>
           <el-button @click="clearChat" v-if="messages.length > 0">
             <el-icon><Delete /></el-icon>清空
@@ -94,6 +95,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Message, Delete, Loading } from '@element-plus/icons-vue'
 import { ragAPI } from '../utils/api'
 
 // 用户信息
@@ -191,6 +193,12 @@ const handleAskQuestion = async () => {
   }
 }
 
+// 处理输入
+const handleInput = (event) => {
+  // 确保输入内容被正确更新
+  currentQuestion.value = event.target.value
+}
+
 // 处理换行
 const handleNewLine = (event) => {
   // 允许Shift + Enter添加换行
@@ -282,7 +290,8 @@ const saveChatHistory = () => {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 280px);
+  height: 600px; /* 改为固定高度，确保在各种屏幕尺寸下都能正常显示 */
+  min-height: 400px;
   border: 1px solid #e1e5e9;
   border-radius: 8px;
   overflow: hidden;
