@@ -1,0 +1,98 @@
+# 依赖
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 环境
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 虚拟环境
+venv/
+env/
+env3/
+pyvenv.cfg
+
+# 构建
+build/
+dist/
+*.egg-info/
+
+# 测试
+coverage/
+.pytest_cache/
+
+# 日志
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# 数据库文件
+*.sqlite
+*.sqlite3
+
+# 证书
+*.pem
+*.key
+*.crt
+
+# 调试信息
+*.pdb
+*.pyc
+
+# 打包
+*.egg
+*.eggs
+
+# 其他
+*.pid
+*.seed
+*.pid.lock
+
+# 本地开发配置
+local_settings.py
+
+# 导出的数据
+*.csv
+*.xlsx
+*.xlsm
+*.json
+
+# 编辑器备份文件
+*~
+*.bak
+*.orig
+
+# Docker相关
+Dockerfile
+.dockerignore
+.docker/
+
+# 不要忽略需要的文件
+!.gitignore
+!requirements.txt
+!main.py
+!app/
+!models/
+!routers/
+!utils/
+!middlewares/
+!services/

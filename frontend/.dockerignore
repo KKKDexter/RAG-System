@@ -1,0 +1,68 @@
+# 依赖
+node_modules/
+
+# 环境
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 构建输出
+dist/
+dist-ssr/
+*.local
+
+# 测试
+coverage/
+.nyc_output/
+
+# 日志
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+
+# 证书
+*.pem
+*.key
+*.crt
+
+# 其他
+*.pid
+*.seed
+*.pid.lock
+
+# 不要忽略需要的文件
+!.gitignore
+!package.json
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml
+!vite.config.js
+
+!index.html
+!src/
+!public/

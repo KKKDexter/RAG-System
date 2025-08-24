@@ -1,0 +1,15 @@
+fastapi==0.95.2
+uvicorn==0.22.0
+pydantic==2.0.3
+sqlalchemy==2.0.19
+passlib==1.7.4
+python-jose==3.3.0
+python-multipart==0.0.6
+tiktoken==0.4.0
+langchain==0.0.240
+pymilvus==2.3.0
+redis==4.5.5
+docx2txt==0.8
+PyPDF2==3.0.1
+python-dotenv==1.0.0
+loguru
