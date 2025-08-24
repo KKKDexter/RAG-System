@@ -171,16 +171,10 @@
 </template>
 
 <script setup>
-<<<<<<< HEAD
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { adminAPI } from '../utils/api.js'
-=======
-import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { adminAPI } from '../utils/api'
->>>>>>> main
 
 // 用户数据
 const users = ref([])
@@ -190,14 +184,10 @@ const roleFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-<<<<<<< HEAD
 const currentUserId = ref(null)
 
 // 表格高度自适应
 const tableHeight = ref(400)
-=======
-const currentUserId = ref<number | null>(null)
->>>>>>> main
 
 // 计算当前页的用户数据
 const usersData = computed(() => {
@@ -277,7 +267,6 @@ const userRules = reactive({
   ]
 })
 
-<<<<<<< HEAD
 // 计算表格最大高度
 const calculateTableHeight = () => {
   const windowHeight = window.innerHeight
@@ -297,8 +286,6 @@ const handleResize = () => {
   calculateTableHeight()
 }
 
-=======
->>>>>>> main
 // 初始化
 onMounted(() => {
   // 获取当前用户信息
@@ -308,7 +295,6 @@ onMounted(() => {
     currentUserId.value = userInfo.id
   }
   
-<<<<<<< HEAD
   // 计算表格高度
   nextTick(() => {
     calculateTableHeight()
@@ -317,20 +303,15 @@ onMounted(() => {
   // 监听窗口大小变化
   window.addEventListener('resize', handleResize)
   
-=======
->>>>>>> main
   // 加载用户列表
   loadUsers()
 })
 
-<<<<<<< HEAD
 // 组件卸载时移除监听
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
 })
 
-=======
->>>>>>> main
 // 加载用户列表
 const loadUsers = async () => {
   try {
@@ -507,7 +488,6 @@ const formatDate = (dateString) => {
 
 <style scoped>
 .user-management {
-<<<<<<< HEAD
   padding: 0;
   height: 100vh;
   display: flex;
@@ -519,18 +499,12 @@ const formatDate = (dateString) => {
   min-width: 0;
   position: relative;
   margin: 0;
-=======
-  padding: 20px;
->>>>>>> main
 }
 
 .page-header {
   margin-bottom: 20px;
-<<<<<<< HEAD
   flex-shrink: 0;
   padding: 20px;
-=======
->>>>>>> main
 }
 
 .page-header h1 {
@@ -545,7 +519,6 @@ const formatDate = (dateString) => {
 
 .action-buttons {
   margin-bottom: 15px;
-<<<<<<< HEAD
   flex-shrink: 0;
   display: flex;
   gap: 10px;
@@ -587,14 +560,6 @@ const formatDate = (dateString) => {
   margin: 0;
   padding: 0;
   border-bottom: none;
-=======
-}
-
-.search-filter {
-  margin-bottom: 15px;
-  display: flex;
-  align-items: center;
->>>>>>> main
 }
 
 .user-info {
@@ -605,7 +570,6 @@ const formatDate = (dateString) => {
 .pagination {
   display: flex;
   justify-content: flex-end;
-<<<<<<< HEAD
   margin-top: 0 !important;
   margin-bottom: 0 !important;
   flex-shrink: 0;
@@ -770,14 +734,10 @@ const formatDate = (dateString) => {
   white-space: normal;
   line-height: 1.5;
   padding: 8px;
-=======
-  margin-top: 20px;
->>>>>>> main
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-<<<<<<< HEAD
   .user-management {
     padding: 0;
   }
@@ -795,11 +755,6 @@ const formatDate = (dateString) => {
     align-items: flex-start;
     padding: 0 15px;
     margin-bottom: 15px;
-=======
-  .search-filter {
-    flex-direction: column;
-    align-items: flex-start;
->>>>>>> main
   }
   
   .search-filter .el-input,
@@ -812,7 +767,6 @@ const formatDate = (dateString) => {
   
   .pagination {
     justify-content: center;
-<<<<<<< HEAD
     padding: 10px 15px;
     margin-top: 0;
     background-color: #fff;
@@ -877,8 +831,6 @@ const formatDate = (dateString) => {
   /* 隐藏更多列 */
   :deep(.el-table-column--phone) {
     display: none;
-=======
->>>>>>> main
   }
 }
 </style>

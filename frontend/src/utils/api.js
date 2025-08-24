@@ -109,20 +109,16 @@ export const ragAPI = {
     })
   },
   
-<<<<<<< HEAD
   // 获取可用的embedding模型列表
   getEmbeddingModels() {
     return api.get('/v1/rag/embedding-models')
   },
   
-=======
->>>>>>> main
   // 获取文档列表
   getDocuments(params) {
     return api.get('/v1/rag/documents', { params })
   },
   
-<<<<<<< HEAD
   // 获取单个文档
   getDocument(id) {
     return api.get(`/v1/rag/documents/${id}`)
@@ -142,8 +138,6 @@ export const ragAPI = {
     })
   },
   
-=======
->>>>>>> main
   // 删除文档
   deleteDocument(id) {
     return api.delete(`/v1/rag/documents/${id}`)
@@ -198,27 +192,6 @@ export const adminAPI = {
   }
 }
 
-<<<<<<< HEAD
-=======
-// 统计数据相关API
-export const statsAPI = {
-  // 获取仪表盘数据
-  getDashboardStats() {
-    return api.get('/v1/stats/dashboard')
-  },
-  
-  // 获取文档统计
-  getDocumentStats(params) {
-    return api.get('/v1/stats/documents', { params })
-  },
-  
-  // 获取问答统计
-  getQAStats(params) {
-    return api.get('/v1/stats/qa', { params })
-  }
-}
-
->>>>>>> main
 // 大模型相关API
 export const llmAPI = {
   // 创建大模型配置

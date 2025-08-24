@@ -14,7 +14,6 @@
       width="500px"
       :before-close="handleCloseUploadDialog"
     >
-<<<<<<< HEAD
       <!-- Embedding模型选择 -->
       <div class="model-selection" style="margin-bottom: 20px;">
         <el-form-item label="Embedding模型" label-width="120px">
@@ -103,31 +102,6 @@
           >
             {{ isUploading ? '上传中...' : `上传 (${fileList.length}个文件)` }}
           </el-button>
-=======
-      <el-upload
-        class="upload-demo"
-        ref="uploadRef"
-        :http-request="handleHttpRequest"
-        :on-success="handleUploadSuccess"
-        :on-error="handleUploadError"
-        :file-list="fileList"
-        :auto-upload="false"
-        accept=".pdf,.docx,.doc,.txt"
-        drag
-      >
-        <el-icon class="el-icon--upload"><Upload /></el-icon>
-        <div class="el-upload__text">
-          点击或拖拽文件到此区域上传
-        </div>
-        <div class="el-upload__tip" slot="tip">
-          支持 .pdf, .docx, .doc, .txt 格式的文件，单个文件大小不超过10MB
-        </div>
-      </el-upload>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="handleCloseUploadDialog">取消</el-button>
-          <el-button type="primary" @click="submitUpload">上传</el-button>
->>>>>>> main
         </span>
       </template>
     </el-dialog>
@@ -166,17 +140,11 @@
             {{ formatDate(row.uploaded_at) }}
           </template>
         </el-table-column>
-<<<<<<< HEAD
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="editDocument(row)">编辑</el-button>
             <el-button type="warning" size="small" @click="updateDocumentFile(row)">更新文件</el-button>
             <el-button type="danger" size="small" @click="deleteDocument(row.id)">删除</el-button>
-=======
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button type="text" @click="deleteDocument(row.id)">删除</el-button>
->>>>>>> main
           </template>
         </el-table-column>
       </el-table>
@@ -184,13 +152,8 @@
       <!-- 分页 -->
       <div class="pagination" v-if="documents.length > 0">
         <el-pagination
-<<<<<<< HEAD
           :current-page="currentPage"
           :page-size="pageSize"
-=======
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
->>>>>>> main
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="documents.length"
@@ -207,7 +170,6 @@
         </el-button>
       </div>
     </el-card>
-<<<<<<< HEAD
     
     <!-- 编辑文档对话框 -->
     <el-dialog
@@ -301,29 +263,20 @@
         </span>
       </template>
     </el-dialog>
-=======
->>>>>>> main
   </div>
 </template>
 
 <script setup>
-<<<<<<< HEAD
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Loading, Check, Close, Document } from '@element-plus/icons-vue'
 import { ragAPI } from '../utils/api.js'
-=======
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ragAPI } from '../utils/api'
->>>>>>> main
 
 // 上传相关
 const showUploadDialog = ref(false)
 const uploadRef = ref()
 const fileList = ref([])
 const uploadProgress = ref(0)
-<<<<<<< HEAD
 const isUploading = ref(false)
 const uploadedCount = ref(0)
 const totalCount = ref(0)
@@ -354,8 +307,6 @@ const editRules = reactive({
     { min: 1, max: 255, message: '文件名长度在 1 到 255 个字符', trigger: 'blur' }
   ]
 })
-=======
->>>>>>> main
 
 // 文档列表相关
 const documents = ref([])
@@ -374,16 +325,10 @@ const filteredDocuments = computed(() => {
   )
 })
 
-<<<<<<< HEAD
 // 初始化时加载文档列表和embedding模型列表
 onMounted(() => {
   fetchDocuments()
   fetchEmbeddingModels()
-=======
-// 初始化时加载文档列表
-onMounted(() => {
-  fetchDocuments()
->>>>>>> main
 })
 
 // 获取文档列表
@@ -399,7 +344,6 @@ const fetchDocuments = async () => {
   }
 }
 
-<<<<<<< HEAD
 // 获取可用的embedding模型列表
 const fetchEmbeddingModels = async () => {
   try {
@@ -583,21 +527,10 @@ const submitUpdateFile = () => {
 
 // 自定义更新文件HTTP请求处理
 const handleUpdateFileHttpRequest = async (options) => {
-=======
-// 提交上传
-const submitUpload = () => {
-  if (!uploadRef.value) return
-  uploadRef.value.submit()
-}
-
-// 自定义HTTP请求处理
-const handleHttpRequest = async (options) => {
->>>>>>> main
   const file = options.file
   const formData = new FormData()
   formData.append('file', file)
   
-<<<<<<< HEAD
   // 如果选择了embedding模型，则添加到请求中
   if (selectedUpdateEmbeddingModelId.value) {
     formData.append('embedding_model_id', selectedUpdateEmbeddingModelId.value)
@@ -606,18 +539,12 @@ const handleHttpRequest = async (options) => {
   try {
     // 使用ragAPI更新文档文件
     const response = await ragAPI.updateDocumentFile(currentDocument.value.id, formData)
-=======
-  try {
-    // 使用ragAPI上传文档
-    const response = await ragAPI.uploadDocument(formData)
->>>>>>> main
     options.onSuccess(response)
   } catch (error) {
     options.onError(error)
   }
 }
 
-<<<<<<< HEAD
 // 处理更新文件成功
 const handleUpdateFileSuccess = (response) => {
   ElMessage.success('文档文件更新成功')
@@ -661,38 +588,12 @@ const handleEditSubmit = async () => {
     console.error('更新文档失败:', error)
     // 错误处理已在api.js中完成
   }
-=======
-// 处理上传成功
-const handleUploadSuccess = (response) => {
-  ElMessage.success('文档上传成功')
-  fetchDocuments() // 重新获取文档列表
-  showUploadDialog.value = false
-  fileList.value = []
-}
-
-// 处理上传失败
-const handleUploadError = (error) => {
-  console.error('文档上传失败:', error)
-  // 错误处理已在api.ts中完成
-}
-
-
-
-// 关闭上传对话框
-const handleCloseUploadDialog = () => {
-  fileList.value = []
-  showUploadDialog.value = false
->>>>>>> main
 }
 
 // 删除文档
 const deleteDocument = (documentId) => {
   ElMessageBox.confirm(
-<<<<<<< HEAD
     '确定要删除这个文档吗？文档将被移入回收站。',
-=======
-    '确定要删除这个文档吗？此操作无法撤销。',
->>>>>>> main
     '确认删除',
     {
       confirmButtonText: '确定',
@@ -807,7 +708,6 @@ const formatDate = (dateString) => {
   text-align: right;
 }
 
-<<<<<<< HEAD
 /* 更新文件对话框样式 */
 .update-file-info {
   margin-bottom: 20px;
@@ -916,8 +816,6 @@ const formatDate = (dateString) => {
   text-overflow: ellipsis;
 }
 
-=======
->>>>>>> main
 /* 响应式设计 */
 @media (max-width: 768px) {
   .page-header {

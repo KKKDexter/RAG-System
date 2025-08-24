@@ -2,21 +2,10 @@
   <div class="llm-management-container">
     <el-card class="page-card">
       <template #header>
-          <el-button type="primary" @click="handleAddModel" icon="el-icon-plus" size="small">
-            添加大模型
->>>>>>> main
-          </el-button>
-        </div>
         <div class="card-header">
           <span>大模型管理</span>
           <el-button type="primary" @click="handleAddModel" size="small">
             <el-icon><Plus /></el-icon>添加大模型
-          </el-button>
-        </div>
-=======
-          <el-button type="primary" @click="handleAddModel" icon="el-icon-plus" size="small">
-            添加大模型
->>>>>>> main
           </el-button>
         </div>
       </template>
@@ -60,10 +49,6 @@
         <el-table-column prop="created_at" label="创建时间" width="180"></el-table-column>
         <el-table-column prop="updated_at" label="更新时间" width="180"></el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
-            <el-button type="primary" icon="el-icon-edit" size="small" @click="handleEditModel(scope.row)"></el-button>
-            <el-button type="danger" icon="el-icon-delete" size="small" @click="handleDeleteModel(scope.row)"></el-button>
->>>>>>> main
-          </template>
           <template #default="scope">
             <el-button type="primary" size="small" @click="handleEditModel(scope.row)">
               <el-icon><Edit /></el-icon>
@@ -72,23 +57,13 @@
               <el-icon><Delete /></el-icon>
             </el-button>
           </template>
-=======
-            <el-button type="primary" icon="el-icon-edit" size="small" @click="handleEditModel(scope.row)"></el-button>
-            <el-button type="danger" icon="el-icon-delete" size="small" @click="handleDeleteModel(scope.row)"></el-button>
->>>>>>> main
-          </template>
         </el-table-column>
       </el-table>
 
       <div class="pagination-container">
         <el-pagination
-<<<<<<< HEAD
           :current-page="currentPage"
           :page-size="pageSize"
-=======
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
->>>>>>> main
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="total"
@@ -99,7 +74,7 @@
     </el-card>
 
     <!-- 添加/编辑模型对话框 -->
-    <el-dialog v-model="dialogVisible" title="{{ dialogTitle }}" width="600px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="modelForm" :rules="rules" ref="modelFormRef" label-width="100px">
         <el-form-item label="模型名称" prop="name">
           <el-input v-model="modelForm.name" placeholder="请输入模型名称"></el-input>
@@ -140,11 +115,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-<<<<<<< HEAD
 import { Search, Plus, Edit, Delete } from '@element-plus/icons-vue'
-=======
-import { Search } from '@element-plus/icons-vue'
->>>>>>> main
 import { llmAPI } from '../utils/api'
 
 // 表格数据和分页
@@ -337,15 +308,16 @@ const handleSearch = () => {
   fetchModels()
 }
 
-// 分页处理
-const handleSizeChange = (size) => {
-  pageSize.value = size
+// 处理分页大小变更
+const handleSizeChange = (newSize) => {
+  pageSize.value = newSize
   currentPage.value = 1
   fetchModels()
 }
 
-const handleCurrentChange = (current) => {
-  currentPage.value = current
+// 处理页码变更
+const handleCurrentChange = (newPage) => {
+  currentPage.value = newPage
   fetchModels()
 }
 </script>
@@ -355,6 +327,10 @@ const handleCurrentChange = (current) => {
   padding: 20px;
 }
 
+.page-card {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -362,14 +338,11 @@ const handleCurrentChange = (current) => {
 }
 
 .filter-container {
-  display: flex;
-  margin-bottom: 16px;
-  align-items: center;
+  margin-bottom: 20px;
 }
 
 .pagination-container {
   margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
+  text-align: right;
 }
 </style>

@@ -55,11 +55,7 @@
     </aside>
     
     <!-- 主内容区域 -->
-<<<<<<< HEAD
     <main class="main-content" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-=======
-    <main class="main-content">
->>>>>>> main
       <!-- 顶部导航栏 -->
       <header class="top-nav">
         <div class="nav-left">
@@ -92,35 +88,19 @@
   </div>
 </template>
 
-<<<<<<< HEAD
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-=======
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import type { UserOut } from '../types/user'
->>>>>>> main
 import { authAPI } from '../utils/api'
 
 const router = useRouter()
 const isSidebarCollapsed = ref(false)
-<<<<<<< HEAD
 const userInfo = ref(null)
 
 // 计算当前激活的菜单项
 const activeMenuItem = computed(() => {
   return router.currentRoute.value.name || 'Dashboard'
-=======
-const userInfo = ref<UserOut | null>(null)
-
-// 计算当前激活的菜单项
-const activeMenuItem = computed(() => {
-  return router.currentRoute.value.name as string || 'Dashboard'
->>>>>>> main
 })
 
 // 切换侧边栏折叠状态
@@ -129,20 +109,12 @@ const toggleSidebar = () => {
 }
 
 // 处理菜单选择
-<<<<<<< HEAD
 const handleMenuSelect = (index) => {
-=======
-const handleMenuSelect = (index: string) => {
->>>>>>> main
   router.push({ name: index })
 }
 
 // 处理下拉菜单命令
-<<<<<<< HEAD
 const handleDropdownCommand = (command) => {
-=======
-const handleDropdownCommand = (command: string) => {
->>>>>>> main
   if (command === 'logout') {
     // 退出登录，清除本地存储
     localStorage.removeItem('token')
@@ -253,18 +225,13 @@ const fetchUserInfo = async () => {
 
 .el-menu-vertical .el-menu-item,
 .el-menu-vertical .el-sub-menu__title {
-<<<<<<< HEAD
   color: #ecf0f1 !important;
-=======
-  color: #ecf0f1;
->>>>>>> main
   height: 48px;
   line-height: 48px;
 }
 
 .el-menu-vertical .el-menu-item:hover,
 .el-menu-vertical .el-sub-menu__title:hover {
-<<<<<<< HEAD
   background-color: #34495e !important;
   color: #ecf0f1 !important;
 }
@@ -293,14 +260,6 @@ const fetchUserInfo = async () => {
 .el-menu-vertical .el-sub-menu .el-menu-item.is-active {
   background-color: #1abc9c !important;
   color: white !important;
-=======
-  background-color: #34495e;
-}
-
-.el-menu-vertical .el-menu-item.is-active {
-  background-color: #1abc9c;
-  color: white;
->>>>>>> main
 }
 
 /* 主内容区域样式 */
@@ -311,7 +270,6 @@ const fetchUserInfo = async () => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-<<<<<<< HEAD
   width: calc(100vw - 240px);
   max-width: calc(100vw - 240px);
   overflow: hidden;
@@ -328,12 +286,6 @@ const fetchUserInfo = async () => {
   margin-left: 60px;
   width: calc(100vw - 60px);
   max-width: calc(100vw - 60px);
-=======
-}
-
-.sidebar.collapsed + .main-content {
-  margin-left: 60px;
->>>>>>> main
 }
 
 /* 顶部导航栏样式 */
@@ -369,7 +321,6 @@ const fetchUserInfo = async () => {
 /* 内容区域样式 */
 .content {
   flex: 1;
-<<<<<<< HEAD
   padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -380,11 +331,6 @@ const fetchUserInfo = async () => {
   /* 严格限制内容不超出可视区域 */
   contain: layout;
   position: relative;
-=======
-  padding: 20px;
-  overflow-y: auto;
-  background-color: #f5f7fa;
->>>>>>> main
 }
 
 /* 响应式设计 */
@@ -406,7 +352,6 @@ const fetchUserInfo = async () => {
     display: block;
   }
 }
-<<<<<<< HEAD
 
 /* Element Plus 菜单组件深度样式覆盖 */
 :deep(.el-menu) {
@@ -445,6 +390,4 @@ const fetchUserInfo = async () => {
   background-color: #1abc9c !important;
   color: white !important;
 }
-=======
->>>>>>> main
 </style>
