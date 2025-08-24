@@ -39,7 +39,6 @@
       </el-button>
     </div>
     
-<<<<<<< HEAD
     <!-- 表格和分页容器 -->
     <div class="table-and-pagination-container">
       <!-- 表格容器 -->
@@ -119,77 +118,6 @@
           @current-change="handleCurrentChange"
         />
       </div>
-=======
-    <!-- 用户列表 -->
-    <el-table
-      v-loading="loading"
-      :data="usersData"
-      style="width: 100%; margin-top: 20px"
-      border
-    >
-      <el-table-column type="index" width="50" />
-      
-      <el-table-column prop="username" label="用户名" width="180" sortable>
-        <template #default="scope">
-          <div class="user-info">
-            <el-avatar size="small" style="margin-right: 10px">{{ scope.row.username?.charAt(0).toUpperCase() }}</el-avatar>
-            <span>{{ scope.row.username }}</span>
-          </div>
-        </template>
-      </el-table-column>
-      
-      <el-table-column prop="email" label="邮箱" width="250" sortable />
-      
-      <el-table-column prop="phone" label="手机号" width="150" />
-      
-      <el-table-column prop="role" label="角色" width="120" sortable>
-        <template #default="scope">
-          <el-tag :type="scope.row.role === 'admin' ? 'primary' : 'success'">
-            {{ scope.row.role === 'admin' ? '管理员' : '普通用户' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      
-      <el-table-column prop="created_at" label="创建时间" width="200" sortable>
-        <template #default="scope">
-          {{ formatDate(scope.row.created_at) }}
-        </template>
-      </el-table-column>
-      
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="scope">
-          <el-button
-            type="primary"
-            size="small"
-            @click="handleEditUser(scope.row)"
-            :disabled="scope.row.id === currentUserId"
-          >
-            编辑
-          </el-button>
-          <el-button
-            type="danger"
-            size="small"
-            @click="handleDeleteUser(scope.row)"
-            :disabled="scope.row.id === currentUserId"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    
-    <!-- 分页 -->
-    <div class="pagination" style="margin-top: 20px">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="total"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
->>>>>>> main
     </div>
     
     <!-- 新增/编辑用户对话框 -->

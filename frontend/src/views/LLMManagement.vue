@@ -2,11 +2,17 @@
   <div class="llm-management-container">
     <el-card class="page-card">
       <template #header>
+          <el-button type="primary" @click="handleAddModel" icon="el-icon-plus" size="small">
+            添加大模型
+>>>>>>> main
+          </el-button>
+        </div>
         <div class="card-header">
           <span>大模型管理</span>
-<<<<<<< HEAD
           <el-button type="primary" @click="handleAddModel" size="small">
             <el-icon><Plus /></el-icon>添加大模型
+          </el-button>
+        </div>
 =======
           <el-button type="primary" @click="handleAddModel" icon="el-icon-plus" size="small">
             添加大模型
@@ -54,14 +60,18 @@
         <el-table-column prop="created_at" label="创建时间" width="180"></el-table-column>
         <el-table-column prop="updated_at" label="更新时间" width="180"></el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
+            <el-button type="primary" icon="el-icon-edit" size="small" @click="handleEditModel(scope.row)"></el-button>
+            <el-button type="danger" icon="el-icon-delete" size="small" @click="handleDeleteModel(scope.row)"></el-button>
+>>>>>>> main
+          </template>
           <template #default="scope">
-<<<<<<< HEAD
             <el-button type="primary" size="small" @click="handleEditModel(scope.row)">
               <el-icon><Edit /></el-icon>
             </el-button>
             <el-button type="danger" size="small" @click="handleDeleteModel(scope.row)">
               <el-icon><Delete /></el-icon>
             </el-button>
+          </template>
 =======
             <el-button type="primary" icon="el-icon-edit" size="small" @click="handleEditModel(scope.row)"></el-button>
             <el-button type="danger" icon="el-icon-delete" size="small" @click="handleDeleteModel(scope.row)"></el-button>
