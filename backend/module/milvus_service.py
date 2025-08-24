@@ -75,6 +75,7 @@ def create_user_collection(user_id: int) -> str:
         logger.error(f"创建集合 {collection_name} 失败: {str(e)}")
         raise
 
+<<<<<<< HEAD
 # 获取或创建Milvus集合
 def get_milvus_collection(collection_name: str) -> Collection:
     logger.info(f"获取Milvus集合: {collection_name}")
@@ -125,6 +126,9 @@ def drop_collection(collection_name: str) -> bool:
     except Exception as e:
         logger.error(f"删除集合 {collection_name} 失败: {str(e)}")
         raise
+=======
+# 搜索相似向量
+>>>>>>> main
 def search_similar_vectors(collection_name: str, query_vector: list, limit: int = 5) -> list:
     logger.info(f"在Milvus集合 {collection_name} 中搜索相似向量，限制结果数: {limit}")
     

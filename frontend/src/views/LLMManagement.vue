@@ -4,8 +4,13 @@
       <template #header>
         <div class="card-header">
           <span>大模型管理</span>
+<<<<<<< HEAD
           <el-button type="primary" @click="handleAddModel" size="small">
             <el-icon><Plus /></el-icon>添加大模型
+=======
+          <el-button type="primary" @click="handleAddModel" icon="el-icon-plus" size="small">
+            添加大模型
+>>>>>>> main
           </el-button>
         </div>
       </template>
@@ -50,20 +55,30 @@
         <el-table-column prop="updated_at" label="更新时间" width="180"></el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="scope">
+<<<<<<< HEAD
             <el-button type="primary" size="small" @click="handleEditModel(scope.row)">
               <el-icon><Edit /></el-icon>
             </el-button>
             <el-button type="danger" size="small" @click="handleDeleteModel(scope.row)">
               <el-icon><Delete /></el-icon>
             </el-button>
+=======
+            <el-button type="primary" icon="el-icon-edit" size="small" @click="handleEditModel(scope.row)"></el-button>
+            <el-button type="danger" icon="el-icon-delete" size="small" @click="handleDeleteModel(scope.row)"></el-button>
+>>>>>>> main
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pagination-container">
         <el-pagination
+<<<<<<< HEAD
           :current-page="currentPage"
           :page-size="pageSize"
+=======
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+>>>>>>> main
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="total"
@@ -115,7 +130,11 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+<<<<<<< HEAD
 import { Search, Plus, Edit, Delete } from '@element-plus/icons-vue'
+=======
+import { Search } from '@element-plus/icons-vue'
+>>>>>>> main
 import { llmAPI } from '../utils/api'
 
 // 表格数据和分页

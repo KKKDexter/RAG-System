@@ -28,6 +28,7 @@
           <!-- 系统消息 -->
           <div v-else class="message system-message">
             <div class="message-avatar">
+<<<<<<< HEAD
               <el-avatar><el-icon><ChatDotRound /></el-icon></el-avatar>
             </div>
             <div class="message-content">
@@ -37,6 +38,18 @@
                 <span v-if="message.modelInfo" class="model-info">
                   由 {{ message.modelInfo }} 生成
                 </span>
+=======
+              <el-avatar icon="Bot" />
+            </div>
+            <div class="message-content">
+              <div class="message-text">{{ message.content }}</div>
+              <div class="message-time">{{ message.time }}</div>
+              <!-- 参考文档提示 -->
+              <div v-if="message.references && message.references.length > 0" class="message-references">
+                <el-tag size="small" type="info" v-for="(ref, refIndex) in message.references" :key="refIndex">
+                  参考: {{ ref }}
+                </el-tag>
+>>>>>>> main
               </div>
             </div>
           </div>
@@ -51,6 +64,7 @@
       
       <!-- 输入区域 -->
       <div class="chat-input-area">
+<<<<<<< HEAD
         <h3 style="margin: 0 0 10px 0; color: #409eff;">💬 在这里输入您的问题：</h3>
         <!-- 使用原生textarea替代el-textarea -->
         <textarea
@@ -93,11 +107,33 @@
               <el-icon><Delete /></el-icon>清空
             </el-button>
           </div>
+=======
+        <el-textarea
+          v-model="currentQuestion"
+          placeholder="请输入您的问题..."
+          :rows="3"
+          :maxlength="1000"
+          show-word-limit
+          resize="none"
+          @input="handleInput"
+          @keydown.enter.exact="handleAskQuestion"
+          @keydown.enter.shift="handleNewLine"
+        />
+        
+        <div class="input-actions">
+          <el-button type="primary" @click="handleAskQuestion" :loading="isLoading" :disabled="!currentQuestion.trim()">
+            <el-icon><Message /></el-icon>发送
+          </el-button>
+          <el-button @click="clearChat" v-if="messages.length > 0">
+            <el-icon><Delete /></el-icon>清空
+          </el-button>
+>>>>>>> main
         </div>
       </div>
     </div>
     
     <!-- 提示信息 -->
+<<<<<<< HEAD
     <div class="tips-container">
       <div class="tips-header" @click="toggleTips">
         <span>💡 使用提示</span>
@@ -118,31 +154,57 @@
         </div>
       </el-collapse-transition>
     </div>
+=======
+    <el-card class="tips-card">
+      <template #header>
+        <div class="card-header">
+          <span>使用提示</span>
+        </div>
+      </template>
+      <ul class="tips-list">
+        <li>1. 确保您已上传相关文档到知识库</li>
+        <li>2. 提问越具体，得到的回答越准确</li>
+        <li>3. 您可以基于之前的回答继续提问</li>
+        <li>4. Shift + Enter 可以输入换行符</li>
+      </ul>
+    </el-card>
+>>>>>>> main
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+<<<<<<< HEAD
 import { Message, Delete, Loading, ChatDotRound, ArrowDown } from '@element-plus/icons-vue'
 import { ragAPI, llmAPI } from '../utils/api.js'
+=======
+import { Message, Delete, Loading } from '@element-plus/icons-vue'
+import { ragAPI } from '../utils/api'
+>>>>>>> main
 
 // 用户信息
 const userInfo = ref(null)
 
+<<<<<<< HEAD
 // 模型选择
 const chatModels = ref([])
 const selectedChatModelId = ref(null)
 
+=======
+>>>>>>> main
 // 聊天相关
 const currentQuestion = ref('')
 const messages = ref([])
 const isLoading = ref(false)
 const chatMessagesRef = ref()
 
+<<<<<<< HEAD
 // 使用提示显示状态
 const showTips = ref(false)
 
+=======
+>>>>>>> main
 // 初始化
 onMounted(() => {
   // 从本地存储获取用户信息
@@ -151,6 +213,7 @@ onMounted(() => {
     userInfo.value = JSON.parse(storedUserInfo)
   }
   
+<<<<<<< HEAD
   // 加载模型列表
   fetchChatModels()
 })
@@ -177,6 +240,12 @@ const handleChatModelChange = (modelId) => {
   }
 }
 
+=======
+  // 可以从本地存储加载历史聊天记录（如果实现了的话）
+  // loadChatHistory()
+})
+
+>>>>>>> main
 // 处理提问
 const handleAskQuestion = async () => {
   const question = currentQuestion.value.trim()
@@ -208,6 +277,7 @@ const handleAskQuestion = async () => {
   try {
     isLoading.value = true
     
+<<<<<<< HEAD
     // 构建请求参数
     const requestData = {
       question: question
@@ -229,6 +299,12 @@ const handleAskQuestion = async () => {
         modelInfo = chatModel.name
       }
     }
+=======
+    // 发送提问请求
+    const response = await ragAPI.askQuestion({
+      question: question
+    })
+>>>>>>> main
     
     // 添加系统回答到聊天列表
     const answerTime = new Date().toLocaleTimeString('zh-CN', {
@@ -240,7 +316,10 @@ const handleAskQuestion = async () => {
       role: 'system',
       content: response.answer,
       time: answerTime,
+<<<<<<< HEAD
       modelInfo: modelInfo || '默认模型',
+=======
+>>>>>>> main
       // 这里可以根据实际API返回添加参考文档信息
       // references: response.references || []
     })
@@ -257,8 +336,12 @@ const handleAskQuestion = async () => {
       time: new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
         minute: '2-digit'
+<<<<<<< HEAD
       }),
       modelInfo: '系统提示'
+=======
+      })
+>>>>>>> main
     })
     // 错误处理已在api.ts中完成
   } finally {
@@ -312,11 +395,14 @@ const clearChat = () => {
     })
 }
 
+<<<<<<< HEAD
 // 切换使用提示显示状态
 const toggleTips = () => {
   showTips.value = !showTips.value
 }
 
+=======
+>>>>>>> main
 // 滚动到底部
 const scrollToBottom = () => {
   if (chatMessagesRef.value) {
@@ -368,6 +454,7 @@ const saveChatHistory = () => {
   color: #666;
 }
 
+<<<<<<< HEAD
 /* 模型选择卡片样式 */
 .model-selection-card {
   border-radius: 12px;
@@ -389,11 +476,17 @@ const saveChatHistory = () => {
   line-height: 1.4;
 }
 
+=======
+>>>>>>> main
 /* 聊天容器样式 */
 .chat-container {
   display: flex;
   flex-direction: column;
+<<<<<<< HEAD
   height: 600px; /* 固定高度 */
+=======
+  height: 600px; /* 改为固定高度，确保在各种屏幕尺寸下都能正常显示 */
+>>>>>>> main
   min-height: 400px;
   border: 1px solid #e1e5e9;
   border-radius: 8px;
@@ -402,6 +495,7 @@ const saveChatHistory = () => {
   background: white;
 }
 
+<<<<<<< HEAD
 /* 为小屏幕调整聊天容器高度 */
 @media (max-width: 768px) {
   .chat-container {
@@ -409,6 +503,8 @@ const saveChatHistory = () => {
   }
 }
 
+=======
+>>>>>>> main
 /* 聊天消息列表样式 */
 .chat-messages {
   flex: 1;
@@ -484,6 +580,7 @@ const saveChatHistory = () => {
   margin-top: 5px;
 }
 
+<<<<<<< HEAD
 /* 系统消息元信息样式 */
 .message-meta {
   margin-top: 5px;
@@ -498,6 +595,13 @@ const saveChatHistory = () => {
   font-style: italic;
   color: #67c23a;
   font-size: 11px;
+=======
+.message-references {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+>>>>>>> main
 }
 
 /* 加载消息样式 */
@@ -518,6 +622,7 @@ const saveChatHistory = () => {
   padding: 20px;
   border-top: 1px solid #e1e5e9;
   background: white;
+<<<<<<< HEAD
   flex-shrink: 0;
   min-height: 120px;
 }
@@ -588,21 +693,47 @@ const saveChatHistory = () => {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 }
+=======
+}
+
+.chat-input-area .el-textarea {
+  margin-bottom: 10px;
+}
+
+.input-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 提示卡片样式 */
+.tips-card {
+  background-color: #f0f9ff;
+  border-color: #bae7ff;
+}
+
+>>>>>>> main
 .tips-list {
   margin: 0;
   padding-left: 20px;
 }
 
 .tips-list li {
+<<<<<<< HEAD
   margin-bottom: 8px;
   color: #666;
   line-height: 1.5;
+=======
+  margin-bottom: 5px;
+  color: #666;
+>>>>>>> main
 }
 
 .tips-list li:last-child {
   margin-bottom: 0;
 }
 
+<<<<<<< HEAD
 /* Element Plus 组件样式优化 */
 .el-select {
   width: 100%;
@@ -625,6 +756,12 @@ const saveChatHistory = () => {
   
   .chat-container {
     height: calc(100vh - 450px);
+=======
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .chat-container {
+    height: calc(100vh - 320px);
+>>>>>>> main
   }
   
   .message-content {
@@ -638,6 +775,7 @@ const saveChatHistory = () => {
   .input-actions .el-button {
     width: 100%;
   }
+<<<<<<< HEAD
   
   .model-selection-card .el-col {
     margin-bottom: 15px;
@@ -674,5 +812,7 @@ textarea:focus {
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+=======
+>>>>>>> main
 }
 </style>

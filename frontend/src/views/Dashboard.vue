@@ -112,7 +112,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+<<<<<<< HEAD
 import { authAPI } from '../utils/api'
+=======
+import { authAPI, statsAPI } from '../utils/api'
+>>>>>>> main
 
 // 用户信息
 const userInfo = ref(null)

@@ -1,13 +1,22 @@
 import os
+<<<<<<< HEAD
 import re
 import requests
+=======
+>>>>>>> main
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from module.database import get_db
+<<<<<<< HEAD
 from module.models import Document, User, QAHistory, LLMModel, ModelType
 from module.schemas import DocumentOut, DocumentUpdate, AskRequest, AskResponse
 from module.auth import get_current_active_user
+=======
+from module.models import Document, User, QAHistory
+from module.schemas import DocumentOut, AskRequest, AskResponse, UserOut
+from module.auth import get_current_active_user, is_admin
+>>>>>>> main
 from module.milvus_service import search_similar_vectors
 from module.document_service import process_document, create_upload_dir, save_uploaded_file
 from module.redis_service import cache_qa_result, get_cached_qa_result
@@ -24,6 +33,7 @@ from langchain_community.chat_models import ChatOpenAI
 from logger_config import get_logger
 logger = get_logger("rag_router")
 
+<<<<<<< HEAD
 # 生成向量的辅助函数
 def generate_embeddings(texts: List[str], embedding_model: LLMModel = None):
     """
@@ -82,6 +92,8 @@ def generate_embeddings(texts: List[str], embedding_model: LLMModel = None):
         logger.warning("向量生成失败，使用占位符向量")
         return vectors
 
+=======
+>>>>>>> main
 # 创建路由
 router = APIRouter(
     prefix="/v1/rag",
@@ -92,15 +104,23 @@ router = APIRouter(
 @router.post("/upload", response_model=DocumentOut)
 async def upload_document(
     file: UploadFile = File(...),
+<<<<<<< HEAD
     embedding_model_id: int = None,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     logger.info(f"用户 {current_user.id} 上传文档: {file.filename}，使用embedding模型ID: {embedding_model_id}")
+=======
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    logger.info(f"用户 {current_user.id} 上传文档: {file.filename}")
+>>>>>>> main
     
     # 创建上传目录
     upload_dir = create_upload_dir()
     
+<<<<<<< HEAD
     # 获取用户选择的embedding模型
     embedding_model = None
     if embedding_model_id:
@@ -117,6 +137,8 @@ async def upload_document(
     else:
         logger.info("使用默认的embedding模型")
     
+=======
+>>>>>>> main
     try:
         # 保存文件
         logger.debug(f"保存上传文件: {file.filename}")
@@ -155,6 +177,7 @@ async def upload_document(
         document_ids = []
         
         for text in texts:
+<<<<<<< HEAD
             # 生成向量
             contents.append(text.page_content)
             document_ids.append(document.id)
@@ -163,6 +186,14 @@ async def upload_document(
         logger.debug(f"为文档 {document.id} 生成 {len(contents)} 个向量")
         vectors = generate_embeddings(contents, embedding_model)
         
+=======
+            # 生成向量 (这里使用占位符向量)
+            vector = [0.1] * VECTOR_DIM  # 实际应该使用embeddings.embed_documents()
+            vectors.append(vector)
+            contents.append(text.page_content)
+            document_ids.append(document.id)
+        
+>>>>>>> main
         # 插入数据
         logger.debug(f"向Milvus集合中插入 {len(vectors)} 条向量数据")
         collection.insert([document_ids, contents, vectors])
@@ -180,6 +211,7 @@ async def upload_document(
             db.commit()
         raise HTTPException(status_code=500, detail=f"文档处理失败: {str(e)}")
 
+<<<<<<< HEAD
 # 获取可用的embedding模型列表
 @router.get("/embedding-models")
 def get_available_embedding_models(
@@ -212,6 +244,8 @@ def get_available_embedding_models(
         logger.error(f"获取embedding模型列表失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取embedding模型列表失败: {str(e)}")
 
+=======
+>>>>>>> main
 # 获取用户文档列表
 @router.get("/documents", response_model=List[DocumentOut])
 def get_documents(
@@ -220,10 +254,14 @@ def get_documents(
 ):
     logger.info(f"用户 {current_user.id} 请求获取文档列表")
     try:
+<<<<<<< HEAD
         documents = db.query(Document).filter(
             Document.user_id == current_user.id,
             Document.is_delete == False
         ).all()
+=======
+        documents = db.query(Document).filter(Document.user_id == current_user.id).all()
+>>>>>>> main
         logger.info(f"成功获取用户 {current_user.id} 的文档列表，共 {len(documents)} 个文档")
         logger.debug(f"文档列表: {[doc.original_filename for doc in documents]}")
         return documents
@@ -261,6 +299,7 @@ def ask_question(
         # 生成问题向量
         logger.debug(f"生成问题向量: {request.question[:30]}...")
         try:
+<<<<<<< HEAD
             # 根据API密钥判断使用哪种嵌入模型
             if EMBEDDING_MODEL_API_KEY and EMBEDDING_MODEL_API_KEY != "None" and EMBEDDING_MODEL_API_KEY != "":
                 # 使用OpenAI嵌入模型
@@ -275,6 +314,22 @@ def ask_question(
                 # 使用ollama或其他本地模型，暂时使用占位符向量
                 logger.info("使用本地模型服务，生成占位符向量")
                 query_vector = [0.1] * VECTOR_DIM
+=======
+            # 创建嵌入模型配置参数
+            embedding_params = {}
+            
+            # 如果设置了API Key，则添加
+            if EMBEDDING_MODEL_API_KEY:
+                embedding_params["openai_api_key"] = EMBEDDING_MODEL_API_KEY
+            
+            # 如果设置了模型名称，则添加
+            if EMBEDDING_MODEL_NAME:
+                embedding_params["model"] = EMBEDDING_MODEL_NAME
+            
+            embeddings = OpenAIEmbeddings(**embedding_params)
+            query_vector = embeddings.embed_query(request.question)
+            logger.info("问题向量生成成功")
+>>>>>>> main
         except Exception as e:
             logger.error(f"问题向量生成失败: {str(e)}")
             # 如果向量生成失败，使用占位符向量继续
@@ -295,6 +350,7 @@ def ask_question(
         logger.debug(f"调用LLM生成答案，上下文长度: {len(context)} 字符")
         try:
             if context:
+<<<<<<< HEAD
                 # 根据API密钥判断使用哪种聊天模型
                 if CHAT_MODEL_API_KEY and CHAT_MODEL_API_KEY != "None" and CHAT_MODEL_API_KEY != "":
                     # 使用OpenAI聊天模型
@@ -349,6 +405,27 @@ def ask_question(
                     else:
                         logger.error(f"ollama API调用失败: {response.status_code} - {response.text}")
                         answer = "生成答案时发生错误，请稍后重试。"
+=======
+                # 创建聊天模型配置参数
+                chat_params = {}
+                
+                # 如果设置了API Key，则添加
+                if CHAT_MODEL_API_KEY:
+                    chat_params["openai_api_key"] = CHAT_MODEL_API_KEY
+                
+                # 如果设置了模型名称，则添加
+                if CHAT_MODEL_NAME:
+                    chat_params["model"] = CHAT_MODEL_NAME
+                
+                llm = ChatOpenAI(**chat_params)
+                
+                # 构建提示
+                prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
+                
+                # 调用LLM生成答案
+                response = llm.predict(prompt)
+                answer = response.strip()
+>>>>>>> main
             else:
                 answer = "没有找到相关内容。"
             
@@ -375,6 +452,7 @@ def ask_question(
         return {"answer": answer}
     except Exception as e:
         logger.error(f"问答处理失败: {str(e)}")
+<<<<<<< HEAD
         raise HTTPException(status_code=500, detail=f"问答处理失败: {str(e)}")
 
 # 获取单个文档
@@ -594,3 +672,6 @@ def delete_document(
         logger.error(f"删除文档失败: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"删除文档失败: {str(e)}")
+=======
+        raise HTTPException(status_code=500, detail=f"问答处理失败: {str(e)}")
+>>>>>>> main
