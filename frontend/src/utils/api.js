@@ -186,4 +186,37 @@ export const statsAPI = {
   }
 }
 
+// 大模型相关API
+export const llmAPI = {
+  // 创建大模型配置
+  createModel(data) {
+    return api.post('/llm/models', data)
+  },
+  
+  // 获取大模型配置列表
+  getModels(params) {
+    return api.get('/llm/models', { params })
+  },
+  
+  // 获取单个大模型配置
+  getModel(id) {
+    return api.get(`/llm/models/${id}`)
+  },
+  
+  // 更新大模型配置
+  updateModel(id, data) {
+    return api.put(`/llm/models/${id}`, data)
+  },
+  
+  // 删除大模型配置
+  deleteModel(id) {
+    return api.delete(`/llm/models/${id}`)
+  },
+  
+  // 根据类型获取大模型配置
+  getModelsByType(type) {
+    return api.get(`/llm/models/type/${type}`)
+  }
+}
+
 export default api

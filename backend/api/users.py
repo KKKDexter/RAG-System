@@ -12,7 +12,7 @@ logger = get_logger("users_router")
 
 # 创建路由
 router = APIRouter(
-    prefix="/api/v1/users",
+    prefix="/v1/users",
     tags=["用户"],
 )
 
@@ -25,7 +25,7 @@ def read_users_me(current_user: User = Depends(get_current_active_user)):
 
 # 管理路由
 admin_router = APIRouter(
-    prefix="/api/v1/admin",
+    prefix="/v1/admin",
     tags=["管理"],
 )
 

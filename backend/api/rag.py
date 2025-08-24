@@ -1,11 +1,13 @@
 import os
+import re
+import requests
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from module.database import get_db
 from module.models import Document, User, QAHistory
-from module.schemas import DocumentOut, AskRequest, AskResponse, UserOut
-from module.auth import get_current_active_user, is_admin
+from module.schemas import DocumentOut, AskRequest, AskResponse
+from module.auth import get_current_active_user
 from module.milvus_service import search_similar_vectors
 from module.document_service import process_document, create_upload_dir, save_uploaded_file
 from module.redis_service import cache_qa_result, get_cached_qa_result
@@ -15,8 +17,8 @@ if env == 'prod':
     from config.prod import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL, RERANK_MODEL_API_KEY, RERANK_MODEL_NAME, RERANK_MODEL_URL
 else:
     from config.dev import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL, RERANK_MODEL_API_KEY, RERANK_MODEL_NAME, RERANK_MODEL_URL
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.chat_models import ChatOpenAI
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.chat_models import ChatOpenAI
 
 # 导入日志配置
 from logger_config import get_logger
@@ -24,7 +26,7 @@ logger = get_logger("rag_router")
 
 # 创建路由
 router = APIRouter(
-    prefix="/api/v1/rag",
+    prefix="/v1/rag",
     tags=["RAG"],
 )
 
@@ -43,8 +45,7 @@ async def upload_document(
     try:
         # 保存文件
         logger.debug(f"保存上传文件: {file.filename}")
-        file_content = await file.read()
-        file_path, file_extension = save_uploaded_file(file_content, upload_dir)
+        file_path, file_extension = await save_uploaded_file(file, upload_dir)
         
         # 创建文档记录
         logger.debug(f"创建文档数据库记录: {file.filename}")
@@ -66,7 +67,10 @@ async def upload_document(
         # 获取用户的Milvus集合
         logger.debug(f"加载Milvus集合: {document.milvus_collection_name}")
         from pymilvus import Collection
-        collection = Collection(name=document.milvus_collection_name)
+        from module.milvus_service import create_user_collection
+        # 确保集合存在
+        collection_name = create_user_collection(current_user.id)
+        collection = Collection(name=collection_name)
         collection.load()
         
         # 准备数据
@@ -145,20 +149,20 @@ def ask_question(
         # 生成问题向量
         logger.debug(f"生成问题向量: {request.question[:30]}...")
         try:
-            # 创建嵌入模型配置参数
-            embedding_params = {}
-            
-            # 如果设置了API Key，则添加
-            if EMBEDDING_MODEL_API_KEY:
-                embedding_params["openai_api_key"] = EMBEDDING_MODEL_API_KEY
-            
-            # 如果设置了模型名称，则添加
-            if EMBEDDING_MODEL_NAME:
-                embedding_params["model"] = EMBEDDING_MODEL_NAME
-            
-            embeddings = OpenAIEmbeddings(**embedding_params)
-            query_vector = embeddings.embed_query(request.question)
-            logger.info("问题向量生成成功")
+            # 根据API密钥判断使用哪种嵌入模型
+            if EMBEDDING_MODEL_API_KEY and EMBEDDING_MODEL_API_KEY != "None" and EMBEDDING_MODEL_API_KEY != "":
+                # 使用OpenAI嵌入模型
+                embedding_params = {
+                    "openai_api_key": EMBEDDING_MODEL_API_KEY,
+                    "model": EMBEDDING_MODEL_NAME
+                }
+                embeddings = OpenAIEmbeddings(**embedding_params)
+                query_vector = embeddings.embed_query(request.question)
+                logger.info("使用OpenAI嵌入模型生成问题向量成功")
+            else:
+                # 使用ollama或其他本地模型，暂时使用占位符向量
+                logger.info("使用本地模型服务，生成占位符向量")
+                query_vector = [0.1] * VECTOR_DIM
         except Exception as e:
             logger.error(f"问题向量生成失败: {str(e)}")
             # 如果向量生成失败，使用占位符向量继续
@@ -179,25 +183,60 @@ def ask_question(
         logger.debug(f"调用LLM生成答案，上下文长度: {len(context)} 字符")
         try:
             if context:
-                # 创建聊天模型配置参数
-                chat_params = {}
-                
-                # 如果设置了API Key，则添加
-                if CHAT_MODEL_API_KEY:
-                    chat_params["openai_api_key"] = CHAT_MODEL_API_KEY
-                
-                # 如果设置了模型名称，则添加
-                if CHAT_MODEL_NAME:
-                    chat_params["model"] = CHAT_MODEL_NAME
-                
-                llm = ChatOpenAI(**chat_params)
-                
-                # 构建提示
-                prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
-                
-                # 调用LLM生成答案
-                response = llm.predict(prompt)
-                answer = response.strip()
+                # 根据API密钥判断使用哪种聊天模型
+                if CHAT_MODEL_API_KEY and CHAT_MODEL_API_KEY != "None" and CHAT_MODEL_API_KEY != "":
+                    # 使用OpenAI聊天模型
+                    chat_params = {
+                        "openai_api_key": CHAT_MODEL_API_KEY,
+                        "model": CHAT_MODEL_NAME
+                    }
+                    llm = ChatOpenAI(**chat_params)
+                    
+                    # 构建提示
+                    prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
+                    
+                    # 调用LLM生成答案
+                    response = llm.predict(prompt)
+                    answer = response.strip()
+                    logger.info("使用OpenAI模型生成答案成功")
+                else:
+                    # 使用ollama本地模型服务
+                    
+                    # 构建提示
+                    prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
+                    
+                    # 调用ollama API
+                    ollama_data = {
+                        "model": CHAT_MODEL_NAME,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "stream": False
+                    }
+                    
+                    response = requests.post(
+                        f"{CHAT_MODEL_URL}/chat/completions",
+                        json=ollama_data,
+                        timeout=60
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        raw_answer = result['choices'][0]['message']['content'].strip()
+                        
+                        # 处理ollama模型的回答，去除think标签及其内容
+                        # 去除<think>...</think>标签及其内容
+                        clean_answer = re.sub(r'<think>.*?</think>', '', raw_answer, flags=re.DOTALL)
+                        # 清理多余的空白字符
+                        answer = re.sub(r'\s+', ' ', clean_answer).strip()
+                        
+                        logger.info("使用ollama模型生成答案成功")
+                    else:
+                        logger.error(f"ollama API调用失败: {response.status_code} - {response.text}")
+                        answer = "生成答案时发生错误，请稍后重试。"
             else:
                 answer = "没有找到相关内容。"
             

@@ -33,12 +33,6 @@
             <div class="message-content">
               <div class="message-text">{{ message.content }}</div>
               <div class="message-time">{{ message.time }}</div>
-              <!-- 参考文档提示 -->
-              <div v-if="message.references && message.references.length > 0" class="message-references">
-                <el-tag size="small" type="info" v-for="(ref, refIndex) in message.references" :key="refIndex">
-                  参考: {{ ref }}
-                </el-tag>
-              </div>
             </div>
           </div>
         </div>
@@ -52,20 +46,25 @@
       
       <!-- 输入区域 -->
       <div class="chat-input-area">
-        <el-textarea
+        <h3 style="margin: 0 0 10px 0; color: #409eff;">💬 在这里输入您的问题：</h3>
+        <!-- 使用原生textarea替代el-textarea -->
+        <textarea
           v-model="currentQuestion"
           placeholder="请输入您的问题..."
-          :rows="3"
-          :maxlength="1000"
-          show-word-limit
-          resize="none"
+          rows="4"
+          maxlength="1000"
+          style="width: 100%; padding: 12px; border: 2px solid #409eff; border-radius: 8px; font-size: 14px; resize: none; font-family: inherit; box-sizing: border-box;"
+          @input="handleInput"
           @keydown.enter.exact="handleAskQuestion"
           @keydown.enter.shift="handleNewLine"
-        />
+        ></textarea>
+        <div style="text-align: right; margin-top: 5px; color: #999; font-size: 12px;">
+          {{ currentQuestion.length }}/1000
+        </div>
         
         <div class="input-actions">
           <el-button type="primary" @click="handleAskQuestion" :loading="isLoading" :disabled="!currentQuestion.trim()">
-            <el-icon><Send /></el-icon>发送
+            <el-icon><Message /></el-icon>发送
           </el-button>
           <el-button @click="clearChat" v-if="messages.length > 0">
             <el-icon><Delete /></el-icon>清空
@@ -94,7 +93,8 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ragAPI } from '../utils/api'
+import { Message, Delete, Loading } from '@element-plus/icons-vue'
+import { ragAPI } from '../utils/api.js'
 
 // 用户信息
 const userInfo = ref(null)
@@ -107,10 +107,14 @@ const chatMessagesRef = ref()
 
 // 初始化
 onMounted(() => {
+  console.log('QASystem组件已加载');
+  console.log('currentQuestion初始值:', currentQuestion.value);
+  
   // 从本地存储获取用户信息
   const storedUserInfo = localStorage.getItem('userInfo')
   if (storedUserInfo) {
     userInfo.value = JSON.parse(storedUserInfo)
+    console.log('用户信息:', userInfo.value);
   }
   
   // 可以从本地存储加载历史聊天记录（如果实现了的话）
@@ -189,6 +193,14 @@ const handleAskQuestion = async () => {
     await nextTick()
     scrollToBottom()
   }
+}
+
+// 处理输入
+const handleInput = (event) => {
+  // 确保输入内容被正确更新
+  currentQuestion.value = event.target.value
+  console.log('输入事件触发:', currentQuestion.value);
+  console.log('事件对象:', event);
 }
 
 // 处理换行
@@ -282,12 +294,20 @@ const saveChatHistory = () => {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 280px);
+  height: 600px; /* 固定高度 */
+  min-height: 400px;
   border: 1px solid #e1e5e9;
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 20px;
   background: white;
+}
+
+/* 为小屏幕调整聊天容器高度 */
+@media (max-width: 768px) {
+  .chat-container {
+    height: calc(100vh - 320px);
+  }
 }
 
 /* 聊天消息列表样式 */
@@ -365,13 +385,6 @@ const saveChatHistory = () => {
   margin-top: 5px;
 }
 
-.message-references {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
 /* 加载消息样式 */
 .loading-message {
   display: flex;
@@ -390,10 +403,8 @@ const saveChatHistory = () => {
   padding: 20px;
   border-top: 1px solid #e1e5e9;
   background: white;
-}
-
-.chat-input-area .el-textarea {
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  min-height: 120px;
 }
 
 .input-actions {

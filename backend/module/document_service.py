@@ -1,10 +1,13 @@
 import os
 import uuid
+import asyncio
 from typing import Tuple, List
 from fastapi import HTTPException
-from langchain.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
+# 修复弃用的导入路径
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.chat_models import ChatOpenAI
 
 # 根据环境变量动态导入配置
 env = os.environ.get('ENVIRONMENT', 'dev')
@@ -94,7 +97,7 @@ def create_upload_dir() -> str:
     return upload_dir
 
 # 保存上传文件
-def save_uploaded_file(file, upload_dir: str) -> Tuple[str, str]:
+async def save_uploaded_file(file, upload_dir: str) -> Tuple[str, str]:
     original_filename = file.filename
     logger.info(f"开始保存上传文件: {original_filename}")
     
@@ -105,9 +108,22 @@ def save_uploaded_file(file, upload_dir: str) -> Tuple[str, str]:
     logger.debug(f"生成唯一文件名: {unique_filename}，保存路径: {file_path}")
     
     try:
-        with open(file_path, "wb") as buffer:
-            content = file.read()
-            buffer.write(content)
+        # 检查是否是异步文件对象 (FastAPI UploadFile)
+        if hasattr(file, 'read'):
+            # 处理FastAPI UploadFile对象
+            if asyncio.iscoroutinefunction(file.read):
+                # 异步读取文件内容
+                content = await file.read()
+            else:
+                # 同步读取文件内容
+                content = file.read()
+            
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+        else:
+            # 处理其他类型的文件对象
+            raise ValueError("不支持的文件对象类型")
+        
         logger.info(f"文件保存成功，大小: {len(content)} 字节")
     except Exception as e:
         logger.error(f"文件保存失败: {str(e)}")

@@ -45,6 +45,10 @@
               <el-icon><Cog /></el-icon>
               <span v-if="!isSidebarCollapsed">RAG系统管理</span>
             </el-menu-item>
+            <el-menu-item index="LLMManagement">
+              <el-icon><Brain /></el-icon>
+              <span v-if="!isSidebarCollapsed">大模型管理</span>
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
       </nav>
@@ -84,20 +88,19 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { UserOut } from '../types/user'
 import { authAPI } from '../utils/api'
 
 const router = useRouter()
 const isSidebarCollapsed = ref(false)
-const userInfo = ref<UserOut | null>(null)
+const userInfo = ref(null)
 
 // 计算当前激活的菜单项
 const activeMenuItem = computed(() => {
-  return router.currentRoute.value.name as string || 'Dashboard'
+  return router.currentRoute.value.name || 'Dashboard'
 })
 
 // 切换侧边栏折叠状态
@@ -106,12 +109,12 @@ const toggleSidebar = () => {
 }
 
 // 处理菜单选择
-const handleMenuSelect = (index: string) => {
+const handleMenuSelect = (index) => {
   router.push({ name: index })
 }
 
 // 处理下拉菜单命令
-const handleDropdownCommand = (command: string) => {
+const handleDropdownCommand = (command) => {
   if (command === 'logout') {
     // 退出登录，清除本地存储
     localStorage.removeItem('token')

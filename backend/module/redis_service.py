@@ -27,6 +27,7 @@ if REDIS_PASSWORD:
 
 # 创建Redis客户端
 logger.info(f"尝试连接Redis服务器: {REDIS_HOST}:{REDIS_PORT}, 数据库: {REDIS_DB}")
+redis_client = None
 try:
     redis_client = redis.Redis(**redis_config)
     # 测试连接
@@ -34,8 +35,20 @@ try:
     logger.info("Redis服务器连接成功")
 except Exception as e:
     logger.error(f"Redis服务器连接失败: {str(e)}")
-    # 继续创建客户端，让应用可以尝试重新连接
-    redis_client = redis.Redis(**redis_config)
+    logger.warning("Redis连接失败，将使用模拟客户端")
+    # 创建一个模拟的Redis客户端，防止应用崩溃
+    class MockRedisClient:
+        def set(self, key, value, ex=None):
+            logger.debug(f"模拟设置Redis缓存: {key}")
+            pass
+        def get(self, key):
+            logger.debug(f"模拟获取Redis缓存: {key}")
+            return None
+        def delete(self, key):
+            logger.debug(f"模拟删除Redis缓存: {key}")
+            pass
+    
+    redis_client = MockRedisClient()
 
 # 缓存问答结果
 def cache_qa_result(user_id: int, question: str, answer: str, expire: int = 3600) -> None:

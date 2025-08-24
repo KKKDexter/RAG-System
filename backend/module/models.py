@@ -1,15 +1,35 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Enum, Boolean
 from sqlalchemy.orm import relationship
-from database import Base
+from .database import Base
 from enum import Enum as PyEnum
+from datetime import datetime
 
 # 用户角色枚举
 class Role(PyEnum):
     admin = "admin"
     user = "user"
 
+# 大模型类型枚举
+class ModelType(PyEnum):
+    chat = "chat"
+    embedding = "embedding"
+    rerank = "rerank"
+
 # 数据库表定义
+class LLMModel(Base):
+    __tablename__ = "llm_models"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, index=True)
+    type = Column(Enum(ModelType))
+    api_key = Column(String(255))
+    base_url = Column(String(255))
+    model_params = Column(Text)
+    is_active = Column(Boolean, default=True)
+    is_delete = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)

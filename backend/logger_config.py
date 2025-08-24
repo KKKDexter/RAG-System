@@ -1,6 +1,7 @@
 from loguru import logger
 import os
 import sys
+from loguru import logger
 
 # 确保日志目录存在
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log')
@@ -45,7 +46,7 @@ logger.add(
 # 添加JSON格式的日志输出，便于日志分析
 logger.add(
     os.path.join(log_dir, "app.json"),
-    format="{{"time":"{time:YYYY-MM-DD HH:mm:ss.SSS}","level":"{level}","module":"{name}","function":"{function}","line":{line},"message":"{message}"}}\n",
+    format="{{\"time\":\"{time:YYYY-MM-DD HH:mm:ss.SSS}\",\"level\":\"{level}\",\"module\":\"{name}\",\"function\":\"{function}\",\"line\":{line},\"message\":\"{message}\"}}\n",
     level="INFO",
     rotation="1 day",
     retention="30 days",

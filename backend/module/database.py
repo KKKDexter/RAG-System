@@ -1,7 +1,13 @@
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from config.dev import DATABASE_URL
+import os
+
+# 根据环境获取配置
+current_env = os.getenv('ENVIRONMENT', 'dev')
+env_config = __import__(f"config.{current_env}", fromlist=["*"])
+DATABASE_URL = env_config.DATABASE_URL
 
 # 导入日志配置
 from logger_config import get_logger
