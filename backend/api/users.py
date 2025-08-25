@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -6,26 +5,15 @@ from passlib.context import CryptContext
 from module.database import get_db
 from module.models import User
 from module.schemas import UserOut, UserCreate, UserUpdate
-=======
-from typing import List
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from module.database import get_db
-from module.models import User
-from module.schemas import UserOut
->>>>>>> main
 from module.auth import get_current_active_user, is_admin
 
 # 导入日志配置
 from logger_config import get_logger
 logger = get_logger("users_router")
 
-<<<<<<< HEAD
 # 密码加密上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-=======
->>>>>>> main
 # 创建路由
 router = APIRouter(
     prefix="/v1/users",
@@ -48,29 +36,21 @@ admin_router = APIRouter(
 # 获取所有用户（管理员权限）
 @admin_router.get("/users", response_model=List[UserOut])
 def get_all_users(
-<<<<<<< HEAD
     include_deleted: bool = Query(False, description="是否包含已删除用户"),
-=======
->>>>>>> main
     current_user: User = Depends(is_admin),
     db: Session = Depends(get_db)
 ):
     logger.info(f"管理员 {current_user.id} 请求获取所有用户列表")
     try:
-<<<<<<< HEAD
         query = db.query(User)
         if not include_deleted:
             query = query.filter(User.is_delete == False)
         users = query.all()
-=======
-        users = db.query(User).all()
->>>>>>> main
         logger.info(f"管理员 {current_user.id} 成功获取所有用户列表，共 {len(users)} 个用户")
         logger.debug(f"用户列表: {[user.username for user in users]}")
         return users
     except Exception as e:
         logger.error(f"管理员获取所有用户列表失败: {str(e)}")
-<<<<<<< HEAD
         raise HTTPException(status_code=500, detail=f"获取用户列表失败: {str(e)}")
 
 # 创建用户（管理员权限）
@@ -368,6 +348,3 @@ def get_system_logs(
     except Exception as e:
         logger.error(f"获取系统日志失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取系统日志失败: {str(e)}")
-=======
-        raise HTTPException(status_code=500, detail=f"获取用户列表失败: {str(e)}")
->>>>>>> main

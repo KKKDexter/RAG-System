@@ -11,7 +11,6 @@ class UserCreate(BaseModel):
     phone: Optional[str] = None
     role: Optional[Role] = Role.user
 
-<<<<<<< HEAD
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
@@ -19,21 +18,15 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     role: Optional[Role] = None
 
-=======
->>>>>>> main
 class UserOut(BaseModel):
     id: int
     username: str
     email: str
-<<<<<<< HEAD
     phone: Optional[str] = None
     role: Role
     is_delete: bool
     created_at: datetime
     updated_at: datetime
-=======
-    role: Role
->>>>>>> main
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,7 +43,6 @@ class LoginRequest(BaseModel):
     password: str
 
 # 文档相关模型
-<<<<<<< HEAD
 class DocumentUpdate(BaseModel):
     original_filename: Optional[str] = None
 
@@ -61,12 +53,6 @@ class DocumentOut(BaseModel):
     is_delete: bool
     uploaded_at: datetime
     updated_at: datetime
-=======
-class DocumentOut(BaseModel):
-    id: int
-    original_filename: str
-    uploaded_at: datetime
->>>>>>> main
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -102,11 +88,8 @@ class LLMModelOut(BaseModel):
 # 问答相关模型
 class AskRequest(BaseModel):
     question: str
-<<<<<<< HEAD
     chat_model_id: Optional[int] = None  # 可选的Chat模型ID
     embedding_model_id: Optional[int] = None  # 可选的Embedding模型ID
-=======
->>>>>>> main
 
 class AskResponse(BaseModel):
     answer: str
