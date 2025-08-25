@@ -1,13 +1,16 @@
 import os
 import uuid
 import asyncio
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from fastapi import HTTPException
 # 修复弃用的导入路径
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.chat_models import ChatOpenAI
+
+# 导入统一存储服务
+from module.storage_service import save_file_to_storage, get_file_from_storage
 
 # 根据环境变量动态导入配置
 env = os.environ.get('ENVIRONMENT', 'dev')
@@ -21,31 +24,84 @@ from logger_config import get_logger
 logger = get_logger("document_service")
 
 # 处理文档
-def process_document(file_path: str, file_extension: str) -> Tuple[List, OpenAIEmbeddings]:
-    logger.info(f"开始处理文档: {os.path.basename(file_path)}, 格式: {file_extension}")
+def process_document(file_path: str = None, minio_path: str = None, file_extension: str = None) -> Tuple[List, OpenAIEmbeddings]:
+    """
+    处理文档，支持从本地或MinIO读取文件
     
-    # 根据文件扩展名选择合适的加载器
-    if file_extension == ".pdf":
-        logger.debug(f"使用PDF加载器处理文件: {file_path}")
-        loader = PyPDFLoader(file_path)
-    elif file_extension == ".txt":
-        logger.debug(f"使用文本加载器处理文件: {file_path}")
-        loader = TextLoader(file_path, encoding="utf-8")
-    elif file_extension in [".docx", ".doc"]:
-        logger.debug(f"使用DOCX加载器处理文件: {file_path}")
-        loader = Docx2txtLoader(file_path)
-    else:
-        logger.error(f"不支持的文件格式: {file_extension}")
-        raise ValueError(f"不支持的文件格式: {file_extension}")
+    Args:
+        file_path: 本地文件路径
+        minio_path: MinIO文件路径
+        file_extension: 文件扩展名
     
-    # 加载文档
-    logger.debug(f"开始加载文档: {file_path}")
+    Returns:
+        Tuple[List, OpenAIEmbeddings]: 文本块列表和嵌入模型
+    """
+    # 确定文件扩展名
+    if not file_extension:
+        if file_path:
+            file_extension = os.path.splitext(file_path)[1].lower()
+        elif minio_path:
+            file_extension = os.path.splitext(minio_path)[1].lower()
+        else:
+            raise ValueError("必须提供文件路径或文件扩展名")
+    
+    display_name = file_path or minio_path or "unknown_file"
+    logger.info(f"开始处理文档: {os.path.basename(display_name)}, 格式: {file_extension}")
+    
+    # 获取文件内容用于加载
+    temp_file_path = None
     try:
-        documents = loader.load()
-        logger.info(f"文档加载成功，共 {len(documents)} 页")
-    except Exception as e:
-        logger.error(f"文档加载失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"文档加载失败: {str(e)}")
+        if file_path and os.path.exists(file_path):
+            # 使用本地文件
+            temp_file_path = file_path
+            logger.debug(f"使用本地文件: {file_path}")
+        elif minio_path:
+            # 从 MinIO 下载文件到临时目录
+            import tempfile
+            file_stream = get_file_from_storage(minio_path=minio_path)
+            
+            # 创建临时文件
+            temp_fd, temp_file_path = tempfile.mkstemp(suffix=file_extension)
+            try:
+                with os.fdopen(temp_fd, 'wb') as temp_file:
+                    temp_file.write(file_stream.read())
+            finally:
+                file_stream.close()
+            
+            logger.debug(f"从 MinIO 下载文件到临时路径: {temp_file_path}")
+        else:
+            raise ValueError("无法获取文件内容，本地文件不存在且未提供MinIO路径")
+    
+        # 根据文件扩展名选择合适的加载器
+        if file_extension == ".pdf":
+            logger.debug(f"使用PDF加载器处理文件: {temp_file_path}")
+            loader = PyPDFLoader(temp_file_path)
+        elif file_extension == ".txt":
+            logger.debug(f"使用文本加载器处理文件: {temp_file_path}")
+            loader = TextLoader(temp_file_path, encoding="utf-8")
+        elif file_extension in [".docx", ".doc"]:
+            logger.debug(f"使用DOCX加载器处理文件: {temp_file_path}")
+            loader = Docx2txtLoader(temp_file_path)
+        else:
+            logger.error(f"不支持的文件格式: {file_extension}")
+            raise ValueError(f"不支持的文件格式: {file_extension}")
+        # 加载文档
+        logger.debug(f"开始加载文档: {temp_file_path}")
+        try:
+            documents = loader.load()
+            logger.info(f"文档加载成功，共 {len(documents)} 页")
+        except Exception as e:
+            logger.error(f"文档加载失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"文档加载失败: {str(e)}")
+        
+    finally:
+        # 清理临时文件（只清理从 MinIO 下载的临时文件）
+        if temp_file_path and temp_file_path != file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+                logger.debug(f"清理临时文件: {temp_file_path}")
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {str(e)}")
     
     # 分割文本
     logger.debug(f"开始分割文本，块大小: {CHUNK_SIZE}, 重叠: {CHUNK_OVERLAP}")
@@ -84,49 +140,41 @@ def process_document(file_path: str, file_extension: str) -> Tuple[List, OpenAIE
     
     return texts, embeddings
 
-# 创建上传目录
-def create_upload_dir() -> str:
-    logger.debug("开始创建上传目录")
-    upload_dir = os.path.join(os.getcwd(), "uploads")
-    try:
-        os.makedirs(upload_dir, exist_ok=True)
-        logger.info(f"上传目录创建成功: {upload_dir}")
-    except Exception as e:
-        logger.error(f"上传目录创建失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"上传目录创建失败: {str(e)}")
-    return upload_dir
-
-# 保存上传文件
-async def save_uploaded_file(file, upload_dir: str) -> Tuple[str, str]:
-    original_filename = file.filename
-    logger.info(f"开始保存上传文件: {original_filename}")
+# 获取存储目录（不自动创建）
+def get_storage_dir(folder_path: str = "documents") -> str:
+    """
+    获取存储目录路径，不自动创建目录
     
-    file_extension = os.path.splitext(original_filename)[1].lower()
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(upload_dir, unique_filename)
-    
-    logger.debug(f"生成唯一文件名: {unique_filename}，保存路径: {file_path}")
-    
-    try:
-        # 检查是否是异步文件对象 (FastAPI UploadFile)
-        if hasattr(file, 'read'):
-            # 处理FastAPI UploadFile对象
-            if asyncio.iscoroutinefunction(file.read):
-                # 异步读取文件内容
-                content = await file.read()
-            else:
-                # 同步读取文件内容
-                content = file.read()
-            
-            with open(file_path, "wb") as buffer:
-                buffer.write(content)
-        else:
-            # 处理其他类型的文件对象
-            raise ValueError("不支持的文件对象类型")
+    Args:
+        folder_path: 文件夹路径
         
-        logger.info(f"文件保存成功，大小: {len(content)} 字节")
+    Returns:
+        str: 存储目录路径
+    """
+    logger.debug(f"获取存储目录路径: {folder_path}")
+    storage_dir = os.path.join(os.getcwd(), folder_path)
+    logger.info(f"存储目录路径: {storage_dir}")
+    return storage_dir
+
+# 保存上传文件（使用统一存储服务）
+async def save_uploaded_file(file, storage_type: Optional[str] = None, folder_path: str = "documents") -> dict:
+    """
+    保存上传文件到指定存储
+    
+    Args:
+        file: 上传的文件对象
+        storage_type: 存储类型 (local, minio, both)
+        folder_path: 文件夹路径
+    
+    Returns:
+        dict: 存储结果信息
+    """
+    logger.info(f"开始保存上传文件: {file.filename}，存储类型: {storage_type}")
+    
+    try:
+        result = await save_file_to_storage(file, folder_path, storage_type)
+        logger.info(f"文件保存成功: {file.filename}")
+        return result
     except Exception as e:
         logger.error(f"文件保存失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
-    
-    return file_path, file_extension

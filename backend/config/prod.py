@@ -41,3 +41,13 @@ EMBEDDING_MODEL_NAME = os.environ.get("EMBEDDING_MODEL_NAME", "text-embedding-ad
 RERANK_MODEL_URL = os.environ.get("RERANK_MODEL_URL", "")
 RERANK_MODEL_API_KEY = os.environ.get("RERANK_MODEL_API_KEY", "")
 RERANK_MODEL_NAME = os.environ.get("RERANK_MODEL_NAME", "")
+
+# 存储配置
+STORAGE_MODE = os.environ.get("STORAGE_MODE", "minio")  # 生产环境默认使用MinIO
+
+# MinIO配置
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "")
+MINIO_SECURE = os.environ.get("MINIO_SECURE", "True").lower() == "true"
+MINIO_BUCKET_NAME = os.environ.get("MINIO_BUCKET_NAME", "rag-documents")

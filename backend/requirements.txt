@@ -26,6 +26,9 @@ pymilvus>=2.3.0,<3.0.0     # 保持兼容性
 # 缓存
 redis>=4.5.5,<5.0.0        # 保持在 4.x 系列
 
+# 对象存储
+minio>=7.1.0,<8.0.0         # MinIO 客户端
+
 # 文档处理
 tiktoken>=0.4.0,<0.6.0     # OpenAI 的 tokenizer
 PyPDF2>=3.0.1,<4.0.0       # 处理 PDF

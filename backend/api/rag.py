@@ -1,31 +1,23 @@
 import os
-<<<<<<< HEAD
-import re
-import requests
-=======
->>>>>>> main
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from module.database import get_db
-<<<<<<< HEAD
-from module.models import Document, User, QAHistory, LLMModel, ModelType
-from module.schemas import DocumentOut, DocumentUpdate, AskRequest, AskResponse
-from module.auth import get_current_active_user
-=======
 from module.models import Document, User, QAHistory
-from module.schemas import DocumentOut, AskRequest, AskResponse, UserOut
-from module.auth import get_current_active_user, is_admin
->>>>>>> main
+from module.schemas import DocumentOut, AskRequest, AskResponse
+from module.auth import get_current_active_user
 from module.milvus_service import search_similar_vectors
-from module.document_service import process_document, create_upload_dir, save_uploaded_file
+from module.document_service import process_document, save_uploaded_file, get_storage_dir
+from module.storage_service import get_storage_service_info
 from module.redis_service import cache_qa_result, get_cached_qa_result
+
 # 根据环境变量动态导入配置
 env = os.environ.get('ENVIRONMENT', 'dev')
 if env == 'prod':
-    from config.prod import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL, RERANK_MODEL_API_KEY, RERANK_MODEL_NAME, RERANK_MODEL_URL
+    from config.prod import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL
 else:
-    from config.dev import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL, RERANK_MODEL_API_KEY, RERANK_MODEL_NAME, RERANK_MODEL_URL
+    from config.dev import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL
+
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.chat_models import ChatOpenAI
 
@@ -33,67 +25,6 @@ from langchain_community.chat_models import ChatOpenAI
 from logger_config import get_logger
 logger = get_logger("rag_router")
 
-<<<<<<< HEAD
-# 生成向量的辅助函数
-def generate_embeddings(texts: List[str], embedding_model: LLMModel = None):
-    """
-    根据指定的embedding模型生成文本向量
-    """
-    try:
-        if embedding_model:
-            # 使用用户选择的模型
-            logger.info(f"使用用户选择的embedding模型: {embedding_model.name}")
-            
-            if embedding_model.api_key and embedding_model.api_key != "None":
-                # 使用OpenAI或类似的API模型
-                from langchain_community.embeddings import OpenAIEmbeddings
-                embedding_params = {
-                    "openai_api_key": embedding_model.api_key,
-                    "model": embedding_model.name
-                }
-                if embedding_model.base_url:
-                    embedding_params["openai_api_base"] = embedding_model.base_url
-                
-                embeddings = OpenAIEmbeddings(**embedding_params)
-                vectors = embeddings.embed_documents(texts)
-                logger.info(f"使用模型 {embedding_model.name} 生成向量成功")
-                return vectors
-            else:
-                # 使用本地模型服务（如ollama）
-                logger.info(f"使用本地embedding模型: {embedding_model.name}")
-                # 这里可以添加对本地embedding模型的调用逻辑
-                # 目前使用占位符向量
-                vectors = [[0.1] * VECTOR_DIM for _ in texts]
-                logger.warning(f"本地模型 {embedding_model.name} 使用占位符向量")
-                return vectors
-        else:
-            # 使用默认配置
-            if EMBEDDING_MODEL_API_KEY and EMBEDDING_MODEL_API_KEY != "None" and EMBEDDING_MODEL_API_KEY != "":
-                # 使用配置文件中的OpenAI模型
-                from langchain_community.embeddings import OpenAIEmbeddings
-                embedding_params = {
-                    "openai_api_key": EMBEDDING_MODEL_API_KEY,
-                    "model": EMBEDDING_MODEL_NAME
-                }
-                embeddings = OpenAIEmbeddings(**embedding_params)
-                vectors = embeddings.embed_documents(texts)
-                logger.info("使用默认OpenAI模型生成向量成功")
-                return vectors
-            else:
-                # 使用默认本地模型
-                logger.info("使用默认本地模型服务")
-                vectors = [[0.1] * VECTOR_DIM for _ in texts]
-                logger.warning("使用占位符向量")
-                return vectors
-    except Exception as e:
-        logger.error(f"向量生成失败: {str(e)}")
-        # 如果向量生成失败，使用占位符向量
-        vectors = [[0.1] * VECTOR_DIM for _ in texts]
-        logger.warning("向量生成失败，使用占位符向量")
-        return vectors
-
-=======
->>>>>>> main
 # 创建路由
 router = APIRouter(
     prefix="/v1/rag",
@@ -104,54 +35,33 @@ router = APIRouter(
 @router.post("/upload", response_model=DocumentOut)
 async def upload_document(
     file: UploadFile = File(...),
-<<<<<<< HEAD
-    embedding_model_id: int = None,
+    storage_type: Optional[str] = Form(None),  # 新增存储类型参数
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    logger.info(f"用户 {current_user.id} 上传文档: {file.filename}，使用embedding模型ID: {embedding_model_id}")
-=======
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    logger.info(f"用户 {current_user.id} 上传文档: {file.filename}")
->>>>>>> main
+    logger.info(f"用户 {current_user.id} 上传文档: {file.filename}，存储类型: {storage_type}")
     
-    # 创建上传目录
-    upload_dir = create_upload_dir()
-    
-<<<<<<< HEAD
-    # 获取用户选择的embedding模型
-    embedding_model = None
-    if embedding_model_id:
-        embedding_model = db.query(LLMModel).filter(
-            LLMModel.id == embedding_model_id,
-            LLMModel.type == ModelType.embedding,
-            LLMModel.is_active == True,
-            LLMModel.is_delete == False
-        ).first()
-        if not embedding_model:
-            logger.warning(f"指定的embedding模型 {embedding_model_id} 不存在或不可用")
-            raise HTTPException(status_code=400, detail="指定的embedding模型不存在或不可用")
-        logger.info(f"使用用户选择的embedding模型: {embedding_model.name}")
-    else:
-        logger.info("使用默认的embedding模型")
-    
-=======
->>>>>>> main
     try:
-        # 保存文件
+        # 保存文件到指定存储
         logger.debug(f"保存上传文件: {file.filename}")
-        file_path, file_extension = await save_uploaded_file(file, upload_dir)
+        storage_result = await save_uploaded_file(file, storage_type, "documents")
         
         # 创建文档记录
         logger.debug(f"创建文档数据库记录: {file.filename}")
         document = Document(
             user_id=current_user.id,
             original_filename=file.filename,
-            stored_path=file_path,
+            stored_path=storage_result.get("local_path"),  # 本地路径（可能为None）
             milvus_collection_name=f"docs_user_{current_user.id}",
         )
+        
+        # 如果是MinIO存储，将MinIO路径存储在额外字段中（需要扩展数据模型）
+        if storage_result.get("minio_path"):
+            # 这里需要扩展Document模型来支持MinIO路径
+            # 暂时存储在stored_path中，格式为 "minio://{minio_path}"
+            if not storage_result.get("local_path"):
+                document.stored_path = f"minio://{storage_result.get('minio_path')}"
+        
         db.add(document)
         db.commit()
         db.refresh(document)
@@ -159,7 +69,20 @@ async def upload_document(
         
         # 处理文档
         logger.debug(f"处理文档: {file.filename}，文档ID: {document.id}")
-        texts, embeddings = process_document(file_path, file_extension)
+        if storage_result.get("local_path"):
+            # 从本地路径处理
+            texts, embeddings = process_document(
+                file_path=storage_result["local_path"], 
+                file_extension=storage_result["file_extension"]
+            )
+        elif storage_result.get("minio_path"):
+            # 从MinIO路径处理
+            texts, embeddings = process_document(
+                minio_path=storage_result["minio_path"], 
+                file_extension=storage_result["file_extension"]
+            )
+        else:
+            raise ValueError("没有有效的文件存储路径")
         
         # 获取用户的Milvus集合
         logger.debug(f"加载Milvus集合: {document.milvus_collection_name}")
@@ -177,23 +100,12 @@ async def upload_document(
         document_ids = []
         
         for text in texts:
-<<<<<<< HEAD
-            # 生成向量
-            contents.append(text.page_content)
-            document_ids.append(document.id)
-        
-        # 使用选择的embedding模型生成向量
-        logger.debug(f"为文档 {document.id} 生成 {len(contents)} 个向量")
-        vectors = generate_embeddings(contents, embedding_model)
-        
-=======
             # 生成向量 (这里使用占位符向量)
             vector = [0.1] * VECTOR_DIM  # 实际应该使用embeddings.embed_documents()
             vectors.append(vector)
             contents.append(text.page_content)
             document_ids.append(document.id)
         
->>>>>>> main
         # 插入数据
         logger.debug(f"向Milvus集合中插入 {len(vectors)} 条向量数据")
         collection.insert([document_ids, contents, vectors])
@@ -204,48 +116,36 @@ async def upload_document(
     except Exception as e:
         # 删除已保存的文件和文档记录
         logger.error(f"文档上传处理失败: {str(e)}")
-        if 'file_path' in locals() and os.path.exists(file_path):
-            os.remove(file_path)
+        # 这里需要根据存储结果来清理文件
+        if 'storage_result' in locals():
+            try:
+                from module.storage_service import delete_file_from_storage
+                delete_file_from_storage(
+                    storage_result.get("local_path"),
+                    storage_result.get("minio_path")
+                )
+            except Exception as cleanup_error:
+                logger.error(f"清理存储文件失败: {str(cleanup_error)}")
+        
         if 'document' in locals():
             db.delete(document)
             db.commit()
         raise HTTPException(status_code=500, detail=f"文档处理失败: {str(e)}")
 
-<<<<<<< HEAD
-# 获取可用的embedding模型列表
-@router.get("/embedding-models")
-def get_available_embedding_models(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+# 获取存储服务信息
+@router.get("/storage-info")
+def get_storage_info(
+    current_user: User = Depends(get_current_active_user)
 ):
-    logger.info(f"用户 {current_user.id} 请求获取可用的embedding模型列表")
-    
+    logger.info(f"用户 {current_user.id} 请求获取存储服务信息")
     try:
-        # 获取所有活跃的embedding模型
-        embedding_models = db.query(LLMModel).filter(
-            LLMModel.type == ModelType.embedding,
-            LLMModel.is_active == True,
-            LLMModel.is_delete == False
-        ).all()
-        
-        # 转换为前端需要的格式
-        models_list = []
-        for model in embedding_models:
-            models_list.append({
-                "id": model.id,
-                "name": model.name,
-                "base_url": model.base_url,
-                "is_local": not model.api_key or model.api_key == "None"
-            })
-        
-        logger.info(f"成功获取 {len(models_list)} 个可用的embedding模型")
-        return models_list
+        storage_info = get_storage_service_info()
+        logger.info(f"成功获取存储服务信息")
+        return storage_info
     except Exception as e:
-        logger.error(f"获取embedding模型列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取embedding模型列表失败: {str(e)}")
+        logger.error(f"获取存储服务信息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取存储服务信息失败: {str(e)}")
 
-=======
->>>>>>> main
 # 获取用户文档列表
 @router.get("/documents", response_model=List[DocumentOut])
 def get_documents(
@@ -254,14 +154,7 @@ def get_documents(
 ):
     logger.info(f"用户 {current_user.id} 请求获取文档列表")
     try:
-<<<<<<< HEAD
-        documents = db.query(Document).filter(
-            Document.user_id == current_user.id,
-            Document.is_delete == False
-        ).all()
-=======
         documents = db.query(Document).filter(Document.user_id == current_user.id).all()
->>>>>>> main
         logger.info(f"成功获取用户 {current_user.id} 的文档列表，共 {len(documents)} 个文档")
         logger.debug(f"文档列表: {[doc.original_filename for doc in documents]}")
         return documents
@@ -299,22 +192,6 @@ def ask_question(
         # 生成问题向量
         logger.debug(f"生成问题向量: {request.question[:30]}...")
         try:
-<<<<<<< HEAD
-            # 根据API密钥判断使用哪种嵌入模型
-            if EMBEDDING_MODEL_API_KEY and EMBEDDING_MODEL_API_KEY != "None" and EMBEDDING_MODEL_API_KEY != "":
-                # 使用OpenAI嵌入模型
-                embedding_params = {
-                    "openai_api_key": EMBEDDING_MODEL_API_KEY,
-                    "model": EMBEDDING_MODEL_NAME
-                }
-                embeddings = OpenAIEmbeddings(**embedding_params)
-                query_vector = embeddings.embed_query(request.question)
-                logger.info("使用OpenAI嵌入模型生成问题向量成功")
-            else:
-                # 使用ollama或其他本地模型，暂时使用占位符向量
-                logger.info("使用本地模型服务，生成占位符向量")
-                query_vector = [0.1] * VECTOR_DIM
-=======
             # 创建嵌入模型配置参数
             embedding_params = {}
             
@@ -329,7 +206,6 @@ def ask_question(
             embeddings = OpenAIEmbeddings(**embedding_params)
             query_vector = embeddings.embed_query(request.question)
             logger.info("问题向量生成成功")
->>>>>>> main
         except Exception as e:
             logger.error(f"问题向量生成失败: {str(e)}")
             # 如果向量生成失败，使用占位符向量继续
@@ -350,62 +226,6 @@ def ask_question(
         logger.debug(f"调用LLM生成答案，上下文长度: {len(context)} 字符")
         try:
             if context:
-<<<<<<< HEAD
-                # 根据API密钥判断使用哪种聊天模型
-                if CHAT_MODEL_API_KEY and CHAT_MODEL_API_KEY != "None" and CHAT_MODEL_API_KEY != "":
-                    # 使用OpenAI聊天模型
-                    chat_params = {
-                        "openai_api_key": CHAT_MODEL_API_KEY,
-                        "model": CHAT_MODEL_NAME
-                    }
-                    llm = ChatOpenAI(**chat_params)
-                    
-                    # 构建提示
-                    prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
-                    
-                    # 调用LLM生成答案
-                    response = llm.predict(prompt)
-                    answer = response.strip()
-                    logger.info("使用OpenAI模型生成答案成功")
-                else:
-                    # 使用ollama本地模型服务
-                    
-                    # 构建提示
-                    prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
-                    
-                    # 调用ollama API
-                    ollama_data = {
-                        "model": CHAT_MODEL_NAME,
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": prompt
-                            }
-                        ],
-                        "stream": False
-                    }
-                    
-                    response = requests.post(
-                        f"{CHAT_MODEL_URL}/chat/completions",
-                        json=ollama_data,
-                        timeout=60
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        raw_answer = result['choices'][0]['message']['content'].strip()
-                        
-                        # 处理ollama模型的回答，去除think标签及其内容
-                        # 去除<think>...</think>标签及其内容
-                        clean_answer = re.sub(r'<think>.*?</think>', '', raw_answer, flags=re.DOTALL)
-                        # 清理多余的空白字符
-                        answer = re.sub(r'\s+', ' ', clean_answer).strip()
-                        
-                        logger.info("使用ollama模型生成答案成功")
-                    else:
-                        logger.error(f"ollama API调用失败: {response.status_code} - {response.text}")
-                        answer = "生成答案时发生错误，请稍后重试。"
-=======
                 # 创建聊天模型配置参数
                 chat_params = {}
                 
@@ -425,7 +245,6 @@ def ask_question(
                 # 调用LLM生成答案
                 response = llm.predict(prompt)
                 answer = response.strip()
->>>>>>> main
             else:
                 answer = "没有找到相关内容。"
             
@@ -452,197 +271,9 @@ def ask_question(
         return {"answer": answer}
     except Exception as e:
         logger.error(f"问答处理失败: {str(e)}")
-<<<<<<< HEAD
         raise HTTPException(status_code=500, detail=f"问答处理失败: {str(e)}")
 
-# 获取单个文档
-@router.get("/documents/{document_id}", response_model=DocumentOut)
-def get_document(
-    document_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    logger.info(f"用户 {current_user.id} 请求获取文档 {document_id}")
-    
-    document = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-        Document.is_delete == False
-    ).first()
-    
-    if not document:
-        logger.warning(f"文档 {document_id} 不存在或用户 {current_user.id} 无权访问")
-        raise HTTPException(status_code=404, detail="文档不存在")
-    
-    logger.info(f"用户 {current_user.id} 成功获取文档 {document_id}")
-    return document
-
-# 更新文档
-@router.put("/documents/{document_id}", response_model=DocumentOut)
-def update_document(
-    document_id: int,
-    document_data: DocumentUpdate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    logger.info(f"用户 {current_user.id} 请求更新文档 {document_id}")
-    
-    document = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-        Document.is_delete == False
-    ).first()
-    
-    if not document:
-        logger.warning(f"文档 {document_id} 不存在或用户 {current_user.id} 无权访问")
-        raise HTTPException(status_code=404, detail="文档不存在")
-    
-    try:
-        # 更新字段
-        update_data = document_data.model_dump(exclude_unset=True)
-        
-        for field, value in update_data.items():
-            setattr(document, field, value)
-        
-        db.commit()
-        db.refresh(document)
-        
-        logger.info(f"用户 {current_user.id} 成功更新文档 {document_id}")
-        return document
-    except Exception as e:
-        logger.error(f"更新文档失败: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"更新文档失败: {str(e)}")
-
-# 更新文档文件
-@router.put("/documents/{document_id}/file", response_model=DocumentOut)
-async def update_document_file(
-    document_id: int,
-    file: UploadFile = File(...),
-    embedding_model_id: int = None,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    logger.info(f"用户 {current_user.id} 请求更新文档 {document_id} 的文件: {file.filename}，使用embedding模型ID: {embedding_model_id}")
-    
-    # 验证文档存在性和权限
-    document = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-        Document.is_delete == False
-    ).first()
-    
-    if not document:
-        logger.warning(f"文档 {document_id} 不存在或用户 {current_user.id} 无权访问")
-        raise HTTPException(status_code=404, detail="文档不存在")
-    
-    # 获取用户选择的embedding模型
-    embedding_model = None
-    if embedding_model_id:
-        embedding_model = db.query(LLMModel).filter(
-            LLMModel.id == embedding_model_id,
-            LLMModel.type == ModelType.embedding,
-            LLMModel.is_active == True,
-            LLMModel.is_delete == False
-        ).first()
-        if not embedding_model:
-            logger.warning(f"指定的embedding模型 {embedding_model_id} 不存在或不可用")
-            raise HTTPException(status_code=400, detail="指定的embedding模型不存在或不可用")
-        logger.info(f"使用用户选择的embedding模型: {embedding_model.name}")
-    else:
-        logger.info("使用默认的embedding模型")
-    
-    # 验证文件类型
-    allowed_extensions = [".pdf", ".docx", ".doc", ".txt"]
-    file_extension = os.path.splitext(file.filename)[1].lower()
-    if file_extension not in allowed_extensions:
-        logger.warning(f"不支持的文件类型: {file.filename}")
-        raise HTTPException(status_code=400, detail=f"不支持的文件类型。支持的格式: {', '.join(allowed_extensions)}")
-    
-    try:
-        # 删除旧文件
-        old_file_path = document.stored_path
-        if os.path.exists(old_file_path):
-            os.remove(old_file_path)
-            logger.debug(f"删除旧文件: {old_file_path}")
-        
-        # 保存新文件
-        upload_dir = create_upload_dir()
-        logger.debug(f"保存新上传文件: {file.filename}")
-        new_file_path, new_file_extension = await save_uploaded_file(file, upload_dir)
-        
-        # 更新文档记录
-        document.original_filename = file.filename
-        document.stored_path = new_file_path
-        
-        # 删除旧的向量数据
-        from module.milvus_service import get_milvus_collection, drop_collection
-        old_collection_name = document.milvus_collection_name
-        try:
-            drop_collection(old_collection_name)
-            logger.debug(f"删除旧的Milvus集合: {old_collection_name}")
-        except Exception as e:
-            logger.warning(f"删除旧Milvus集合失败，但继续处理: {str(e)}")
-        
-        # 生成新的集合名称
-        import time
-        timestamp = int(time.time())
-        new_collection_name = f"docs_user_{current_user.id}_{document.id}_{timestamp}"
-        document.milvus_collection_name = new_collection_name
-        
-        # 保存数据库变更
-        db.commit()
-        db.refresh(document)
-        logger.info(f"文档记录更新成功，新文档ID: {document.id}")
-        
-        # 处理新文档并生成向量
-        logger.debug(f"处理新文档: {file.filename}，文档ID: {document.id}")
-        
-        # 获取或创建Milvus集合
-        logger.debug(f"加载Milvus集合: {document.milvus_collection_name}")
-        collection = get_milvus_collection(document.milvus_collection_name)
-        
-        # 为文档准备向量数据
-        logger.debug(f"为文档 {document.id} 准备向量数据")
-        contents = []
-        document_ids = []
-        
-        # 处理文档内容
-        text_chunks = process_document(new_file_path, new_file_extension)
-        
-        for i, chunk in enumerate(text_chunks):
-            contents.append(chunk)
-            document_ids.append(f"{document.id}_{i}")
-        
-        if contents:
-            logger.debug(f"文档 {document.id} 共生成 {len(contents)} 个文本块")
-            
-            # 使用选择的embedding模型生成向量
-            vectors = generate_embeddings(contents, embedding_model)
-            
-            # 插入向量到Milvus
-            logger.debug(f"将 {len(vectors)} 个向量插入Milvus集合 {document.milvus_collection_name}")
-            entities = [
-                document_ids,
-                vectors,
-                contents
-            ]
-            
-            collection.insert(entities)
-            collection.load()
-            logger.info(f"文档 {document.id} 向量数据插入成功")
-        else:
-            logger.warning(f"文档 {document.id} 没有提取到有效内容")
-        
-        logger.info(f"用户 {current_user.id} 成功更新文档 {document_id} 的文件")
-        return document
-    
-    except Exception as e:
-        logger.error(f"更新文档文件失败: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"更新文档文件失败: {str(e)}")
-
-# 逻辑删除文档
+# 删除文档
 @router.delete("/documents/{document_id}")
 def delete_document(
     document_id: int,
@@ -653,8 +284,7 @@ def delete_document(
     
     document = db.query(Document).filter(
         Document.id == document_id,
-        Document.user_id == current_user.id,
-        Document.is_delete == False
+        Document.user_id == current_user.id
     ).first()
     
     if not document:
@@ -662,8 +292,22 @@ def delete_document(
         raise HTTPException(status_code=404, detail="文档不存在")
     
     try:
-        # 逻辑删除
-        document.is_delete = True
+        # 删除存储的文件
+        if document.stored_path:
+            if document.stored_path.startswith("minio://"):
+                # MinIO存储
+                minio_path = document.stored_path[8:]  # 移除 "minio://" 前缀
+                from module.storage_service import delete_file_from_storage
+                delete_result = delete_file_from_storage(minio_path=minio_path)
+                logger.debug(f"MinIO文件删除结果: {delete_result}")
+            else:
+                # 本地存储
+                from module.storage_service import delete_file_from_storage
+                delete_result = delete_file_from_storage(file_path=document.stored_path)
+                logger.debug(f"本地文件删除结果: {delete_result}")
+        
+        # 删除数据库记录
+        db.delete(document)
         db.commit()
         
         logger.info(f"用户 {current_user.id} 成功删除文档 {document_id}")
@@ -672,6 +316,3 @@ def delete_document(
         logger.error(f"删除文档失败: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"删除文档失败: {str(e)}")
-=======
-        raise HTTPException(status_code=500, detail=f"问答处理失败: {str(e)}")
->>>>>>> main

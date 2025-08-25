@@ -46,3 +46,13 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-ada-002
 RERANK_MODEL_URL = os.getenv("RERANK_MODEL_URL", "")
 RERANK_MODEL_API_KEY = os.getenv("RERANK_MODEL_API_KEY", "")
 RERANK_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "")
+
+# 存储配置
+STORAGE_MODE = os.getenv("STORAGE_MODE", "local")  # local, minio, both
+
+# MinIO配置
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
+MINIO_SECURE = os.getenv("MINIO_SECURE", "False").lower() == "true"
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "rag-documents")
