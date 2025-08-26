@@ -20,6 +20,7 @@ router = APIRouter(
 # 获取当前用户信息
 @router.get("/me", response_model=UserOut)
 def read_users_me(current_user: User = Depends(get_current_active_user)):
+    """获取当前登录用户的信息"""
     logger.info(f"用户 {current_user.id} 请求获取自己的信息")
     logger.debug(f"用户信息: 用户名={current_user.username}, 角色={current_user.role}")
     return current_user

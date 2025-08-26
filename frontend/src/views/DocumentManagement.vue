@@ -97,14 +97,14 @@
       </div>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="handleCloseUploadDialog">取消</el-button>
+          <el-button @click="handleCloseUploadDialog" :disabled="isUploading">取消</el-button>
           <el-button 
             type="primary" 
             @click="submitUpload" 
             :loading="isUploading"
             :disabled="fileList.length === 0"
           >
-            {{ isUploading ? '上传中...' : `上传 (${fileList.length}个文件)` }}
+            {{ isUploading ? `上传中... (${uploadedCount}/${totalCount})` : `上传 (${fileList.length}个文件)` }}
           </el-button>
         </span>
       </template>
@@ -377,6 +377,64 @@ onMounted(() => {
   })
 })
 
+// 启动文档状态轮询（用于上传后检测处理状态）
+const startDocumentStatusPolling = () => {
+  console.log('开始监控文档处理状态')
+  
+  // 创建一个新的定时器，专门用于监控文档处理状态
+  let pollCount = 0
+  const maxPolls = 120 // 最多轮询120次，即10分钟
+  
+  const pollInterval = setInterval(async () => {
+    pollCount++
+    console.log(`状态轮询第 ${pollCount} 次，时间: ${new Date().toLocaleTimeString()}`)
+    
+    try {
+      // 获取最新的文档列表
+      const latestDocuments = await ragAPI.getDocuments()
+      console.log(`获取到 ${latestDocuments.length} 个文档`)
+      
+      // 检查是否还有处理中的文档
+      const processingDocs = latestDocuments.filter(doc => 
+        doc.status === 'pending' || doc.status === 'processing'
+      )
+      
+      const completedDocs = latestDocuments.filter(doc => doc.status === 'processed')
+      const failedDocs = latestDocuments.filter(doc => doc.status === 'failed')
+      
+      console.log(`文档状态统计: 处理中=${processingDocs.length}, 已完成=${completedDocs.length}, 失败=${failedDocs.length}`)
+      
+      // 更新文档列表
+      documents.value = latestDocuments
+      
+      // 如果没有处理中的文档或超过最大轮询次数，停止轮询
+      if (processingDocs.length === 0 || pollCount >= maxPolls) {
+        console.log(`停止状态轮询，原因: ${processingDocs.length === 0 ? '所有文档已处理完成' : '超过最大轮询次数'}`)
+        clearInterval(pollInterval)
+        
+        // 显示处理完成的通知
+        if (processingDocs.length === 0) {
+          if (completedDocs.length > 0) {
+            ElMessage.success(`所有文档处理完成！完成: ${completedDocs.length}个`)
+          }
+          if (failedDocs.length > 0) {
+            ElMessage.warning(`有 ${failedDocs.length} 个文档处理失败，请检查错误信息`)
+          }
+        } else {
+          ElMessage.warning('文档处理耗时较长，请手动刷新页面查看状态')
+        }
+      } else {
+        console.log(`还有 ${processingDocs.length} 个文档在处理中，继续轮询...`)
+      }
+    } catch (error) {
+      console.error('状态轮询失败:', error)
+      // 遇到错误时停止轮询
+      clearInterval(pollInterval)
+      ElMessage.error('状态轮询失败，请手动刷新页面')
+    }
+  }, 5000) // 每5秒检查一次，更快的响应
+}
+
 // 获取文档列表
 const fetchDocuments = async () => {
   try {
@@ -448,16 +506,24 @@ const submitUpload = async () => {
     return
   }
   
+  // 设置上传状态
   isUploading.value = true
   uploadedCount.value = 0
   totalCount.value = fileList.value.length
   
+  // 立即显示开始上传的消息
+  ElMessage.info(`开始上传 ${totalCount.value} 个文件...`)
+  
+  // 立即关闭对话框，符合前端状态管理规范
+  showUploadDialog.value = false
+  const uploadFiles = [...fileList.value] // 保存一个副本
+  fileList.value = []
+  selectedEmbeddingModelId.value = null
+  
   try {
     // 每个文件单独上传
-    for (let i = 0; i < fileList.value.length; i++) {
-      const fileItem = fileList.value[i]
-      // 设置文件状态为上传中
-      fileItem.status = 'uploading'
+    for (let i = 0; i < uploadFiles.length; i++) {
+      const fileItem = uploadFiles[i]
       
       try {
         const formData = new FormData()
@@ -472,14 +538,14 @@ const submitUpload = async () => {
         await ragAPI.uploadDocument(formData)
         
         // 上传成功
-        fileItem.status = 'success'
         uploadedCount.value++
         console.log(`文件 ${fileItem.name} 上传成功`)
+        
+        // 实时显示上传进度
+        ElMessage.success(`文件 "${fileItem.name}" 上传成功 (${uploadedCount.value}/${totalCount.value})`)
+        
       } catch (error) {
         // 上传失败
-        fileItem.status = 'error'
-        
-        // 详细的错误处理
         let errorMessage = '上传失败'
         if (error.code === 'ECONNABORTED') {
           errorMessage = '上传超时，文件可能过大或网络问题'
@@ -489,28 +555,28 @@ const submitUpload = async () => {
           errorMessage = error.message
         }
         
-        fileItem.errorMessage = errorMessage
         console.error(`文件 ${fileItem.name} 上传失败:`, error)
+        
+        // 显示具体的错误信息
+        ElMessage.error(`文件 "${fileItem.name}" 上传失败: ${errorMessage}`)
       }
     }
     
     // 刷新文档列表
     await fetchDocuments()
     
+    // 显示最终结果
     if (uploadedCount.value === totalCount.value) {
       ElMessage.success(`所有文件上传成功！共上传 ${uploadedCount.value} 个文件`)
-      
-      // 延迟关闭对话框，让用户看到结果
-      setTimeout(() => {
-        showUploadDialog.value = false
-        fileList.value = []
-        selectedEmbeddingModelId.value = null
-      }, 2000)
     } else if (uploadedCount.value > 0) {
       ElMessage.warning(`部分文件上传成功：${uploadedCount.value} 个成功，${totalCount.value - uploadedCount.value} 个失败`)
     } else {
       ElMessage.error('所有文件上传失败')
     }
+    
+    // 启动定时刷新，检测文档处理状态变化
+    startDocumentStatusPolling()
+    
   } catch (error) {
     console.error('上传过程中发生错误:', error)
     ElMessage.error('上传过程中发生错误')
@@ -523,22 +589,27 @@ const submitUpload = async () => {
 const handleCloseUploadDialog = () => {
   if (isUploading.value) {
     ElMessageBox.confirm(
-      '上传正在进行中，确定要取消吗？',
+      '上传正在进行中，确定要取消吗？取消后已上传的文件不会被删除。',
       '确认取消',
       {
-        confirmButtonText: '确定',
+        confirmButtonText: '确定取消',
         cancelButtonText: '继续上传',
         type: 'warning'
       }
     ).then(() => {
+      // 重置状态
       fileList.value = []
       selectedEmbeddingModelId.value = null
       showUploadDialog.value = false
       isUploading.value = false
+      uploadedCount.value = 0
+      totalCount.value = 0
+      ElMessage.info('上传已取消')
     }).catch(() => {
       // 用户选择继续上传
     })
   } else {
+    // 正常关闭
     fileList.value = []
     selectedEmbeddingModelId.value = null
     showUploadDialog.value = false

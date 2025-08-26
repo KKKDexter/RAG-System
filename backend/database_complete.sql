@@ -67,11 +67,14 @@ CREATE TABLE IF NOT EXISTS documents (
     original_filename VARCHAR(255) NOT NULL,
     stored_path VARCHAR(255) NOT NULL,
     milvus_collection_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '处理状态（pending,processing,processed,failed）',
+    error_message VARCHAR(255) NULL COMMENT '错误信息',
     is_delete BOOLEAN DEFAULT FALSE COMMENT '逻辑删除标记',
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_user_id (user_id),
     INDEX idx_milvus_collection_name (milvus_collection_name),
+    INDEX idx_document_status (status),
     INDEX idx_is_delete (is_delete),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

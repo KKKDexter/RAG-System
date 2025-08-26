@@ -71,29 +71,57 @@ try:
     
     print("[INFO] 安全配置（SECRET_KEY、ALGORITHM）已从数据库动态加载")
     
+    # 先导入认证路由（最重要）
     from api.auth import router as auth_router
     print("[DEBUG] 成功导入 auth_router")
-    from api.rag import router as rag_router
-    print("[DEBUG] 成功导入 rag_router")
+    
+    # 导入用户路由（次重要）
     from api.users import router as users_router, admin_router
     print("[DEBUG] 成功导入 users_router 和 admin_router")
-    from api.llm import router as llm_router
-    print("[DEBUG] 成功导入 llm_router")
-    from api.config import router as config_router
-    print("[DEBUG] 成功导入 config_router")
+    
+    # 导入其他路由（允许失败）
+    try:
+        from api.rag import router as rag_router
+        print("[DEBUG] 成功导入 rag_router")
+    except Exception as e:
+        print(f"[WARNING] 导入 rag_router 失败: {str(e)}")
+        rag_router = None
+    
+    try:
+        from api.llm import router as llm_router
+        print("[DEBUG] 成功导入 llm_router")
+    except Exception as e:
+        print(f"[WARNING] 导入 llm_router 失败: {str(e)}")
+        llm_router = None
+    
+    try:
+        from api.config import router as config_router
+        print("[DEBUG] 成功导入 config_router")
+    except Exception as e:
+        print(f"[WARNING] 导入 config_router 失败: {str(e)}")
+        config_router = None
     
     # 导入日志配置
     from logger_config import get_logger
     logger = get_logger("main")
     
-    print("[SUCCESS] 所有模块导入成功")
+    print("[SUCCESS] 核心模块导入成功")
 except Exception as e:
     print(f"导入模块时出错: {str(e)}")
-    print("[WARNING] 部分模块导入失败，服务可能无法正常运行")
+    print("[WARNING] 部分模块导入失败，但核心功能应该可用")
     # 设置默认值以避免后续错误
     if MILVUS_HOST is None:
         MILVUS_HOST = "localhost"
         MILVUS_PORT = "19530"
+    
+    # 确保核心路由存在
+    if 'auth_router' not in locals():
+        auth_router = None
+        print("[ERROR] 认证路由导入失败")
+    if 'users_router' not in locals():
+        users_router = None
+        admin_router = None
+        print("[ERROR] 用户路由导入失败")
 
 # 使用lifespan事件处理器替代on_event
 @asynccontextmanager
@@ -160,27 +188,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由（只有在成功导入的情况下才注册）
+# 注册路由（优先注册核心路由）
+print("\n[INFO] 开始注册路由...")
+
+# 核心路由：认证和用户管理
 if auth_router:
     app.include_router(auth_router)
-    print("[DEBUG] 已注册 auth_router: /v1/auth/*")
-if rag_router:
-    app.include_router(rag_router)
-    print("[DEBUG] 已注册 rag_router: /v1/rag/*")
+    print("[DEBUG] ✅ 已注册 auth_router: /v1/auth/*")
+else:
+    print("[ERROR] ❌ auth_router 注册失败")
+
 if users_router:
     app.include_router(users_router)
-    print("[DEBUG] 已注册 users_router: /v1/users/*")
+    print("[DEBUG] ✅ 已注册 users_router: /v1/users/*")
+else:
+    print("[ERROR] ❌ users_router 注册失败")
+
 if admin_router:
     app.include_router(admin_router)
-    print("[DEBUG] 已注册 admin_router: /v1/admin/*")
+    print("[DEBUG] ✅ 已注册 admin_router: /v1/admin/*")
+else:
+    print("[ERROR] ❌ admin_router 注册失败")
+
+# 可选路由：其他功能
+if rag_router:
+    app.include_router(rag_router)
+    print("[DEBUG] ✅ 已注册 rag_router: /v1/rag/*")
+else:
+    print("[WARNING] ⚠️ rag_router 未注册")
+
 if llm_router:
     app.include_router(llm_router)
-    print("[DEBUG] 已注册 llm_router: /llm/*")
+    print("[DEBUG] ✅ 已注册 llm_router: /llm/*")
+else:
+    print("[WARNING] ⚠️ llm_router 未注册")
+
 if config_router:
     app.include_router(config_router)
-    print("[DEBUG] 已注册 config_router: /v1/config/*")
+    print("[DEBUG] ✅ 已注册 config_router: /v1/config/*")
+else:
+    print("[WARNING] ⚠️ config_router 未注册")
 
-print(f"[INFO] 路由注册完成，应用包含 {len(app.routes)} 个路由")
+print(f"\n[INFO] 路由注册完成，应用包含 {len(app.routes)} 个路由")
+
+# 显示所有注册的路由
+print("[DEBUG] 所有注册的路由:")
+for route in app.routes:
+    if hasattr(route, 'path') and hasattr(route, 'methods'):
+        print(f"  {route.path} - {route.methods}")
 
 if __name__ == "__main__":
     import uvicorn

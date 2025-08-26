@@ -136,30 +136,49 @@ def process_document(file_path: str = None, minio_path: str = None, file_extensi
         
         # 尝试从数据库获取模型
         try:
-            from sqlalchemy.orm import Session
-            from .database import get_db
+            from sqlalchemy import create_engine
+            # 直接使用engine而不是导入get_db_engine
+            from .database import engine
             from .models import LLMModel
-            from .base_service import llm_model_service
+            from sqlalchemy.orm import sessionmaker
             
             # 创建临时数据库会话
-            db = next(get_db())
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            db = SessionLocal()
             
-            # 根据模型名称查询
-            if model_name:
-                db_model = llm_model_service.get_by_name(db, model_name)
-                if db_model and db_model.type == "embedding" and db_model.is_active:
-                    logger.info(f"从数据库获取到模型配置: {model_name}")
-                    api_key = db_model.api_key
-                    model_url = db_model.base_url
+            try:
+                # 根据模型名称查询
+                if model_name:
+                    db_model = db.query(LLMModel).filter(
+                        LLMModel.name == model_name,
+                        LLMModel.type == "embedding",
+                        LLMModel.is_active == True,
+                        LLMModel.is_delete == False
+                    ).first()
+                    
+                    if db_model:
+                        logger.info(f"从数据库获取到模型配置: {model_name}")
+                        api_key = db_model.api_key or api_key
+                        model_url = db_model.base_url
+                    else:
+                        logger.info(f"数据库中未找到模型 {model_name}，使用默认配置")
+            finally:
+                db.close()
+                
         except Exception as db_error:
             logger.warning(f"从数据库获取模型配置失败: {str(db_error)}")
         
         # 创建嵌入模型配置参数
-        embedding_params = {}
+        embedding_params = {
+            "request_timeout": 30,  # 30秒超时
+            "max_retries": 3,       # 最大重试次数
+        }
         
         # 如果设置了API Key，则添加
         if api_key:
-            embedding_params["openai_api_key"] = api_key
+            embedding_params["api_key"] = api_key
+        else:
+            logger.warning("未配置EMBEDDING_MODEL_API_KEY，将使用环境变量OPENAI_API_KEY")
         
         # 如果设置了模型名称，则添加
         if model_name:
@@ -167,17 +186,114 @@ def process_document(file_path: str = None, minio_path: str = None, file_extensi
             
         # 如果设置了基础URL，则添加
         if model_url:
-            embedding_params["openai_api_base"] = model_url
+            embedding_params["base_url"] = model_url
+            logger.info(f"使用自定义基础URL: {model_url}")
             
-        # 设置默认的请求超时时间
-        embedding_params["request_timeout"] = 30  # 30秒超时
+        # 创建嵌入模型实例（根据模型名称选择不同的嵌入类）
+        is_ollama_model = (
+            "nomic" in model_name.lower() or 
+            "embed" in model_name.lower() or 
+            ":" in model_name or 
+            "localhost" in str(model_url) or 
+            "192.168.1.11" in str(model_url) or
+            model_url and "11434" in str(model_url)  # Ollama默认端口
+        )
         
-        # 创建嵌入模型实例
-        embeddings = OpenAIEmbeddings(**embedding_params)
+        if is_ollama_model:
+            # 这是Ollama本地模型
+            try:
+                from langchain_community.embeddings import OllamaEmbeddings
+                logger.info(f"使用Ollama嵌入模型: {model_name}, 服务地址: {model_url}")
+                
+                # Ollama模型参数
+                ollama_params = {
+                    "model": model_name,
+                }
+                
+                # 处理不同的URL格式
+                if model_url:
+                    if model_url.endswith('/v1'):
+                        # 如果是/v1结尾，去掉/v1部分
+                        base_url = model_url.replace('/v1', '')
+                    else:
+                        base_url = model_url
+                    ollama_params["base_url"] = base_url
+                    logger.info(f"Ollama基础URL: {base_url}")
+                else:
+                    ollama_params["base_url"] = "http://localhost:11434"  # Ollama默认端口
+                
+                embeddings = OllamaEmbeddings(**ollama_params)
+                logger.info(f"Ollama嵌入模型创建成功: {model_name}")
+                
+            except ImportError as import_error:
+                logger.error(f"Ollama依赖不可用: {import_error}")
+                logger.error("请安装: pip install langchain-community")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Ollama依赖缺失: {str(import_error)}"
+                )
+            except Exception as ollama_error:
+                logger.error(f"Ollama模型初始化失败: {str(ollama_error)}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Ollama模型初始化失败: {str(ollama_error)}"
+                )
+        else:
+            # 使用OpenAI模型
+            logger.info(f"使用OpenAI嵌入模型: {model_name}")
+            embeddings = OpenAIEmbeddings(**embedding_params)
+        
+        # 测试模型是否可用（用一个简单的测试文本）
+        # 在函数开始处声明global
+        global VECTOR_DIM
+        
+        try:
+            test_embedding = embeddings.embed_query("测试文本")
+            actual_dim = len(test_embedding)
+            
+            # 对于Ollama模型，向量维度可能不同于默认的OpenAI维度
+            if ("nomic" in model_name.lower() or 
+                "ollama" in str(type(embeddings)).lower() or
+                "192.168.1.11" in str(model_url)):
+                logger.info(f"Ollama嵌入模型测试成功: {model_name}, 向量维度: {actual_dim}")
+                # 更新VECTOR_DIM为实际维度，以便后续使用
+                VECTOR_DIM = actual_dim
+                logger.info(f"更新VECTOR_DIM为: {VECTOR_DIM}")
+            elif actual_dim != VECTOR_DIM:
+                logger.warning(f"向量维度不匹配: 期望 {VECTOR_DIM}，实际 {actual_dim}")
+            else:
+                logger.info(f"嵌入模型测试成功: {model_name}, 向量维度: {actual_dim}")
+                
+        except Exception as test_error:
+            logger.error(f"嵌入模型测试失败: {str(test_error)}")
+            # 对于Ollama模型，如果测试失败，不抛出异常，让后续代码尝试处理
+            if ("nomic" in model_name.lower() or 
+                "192.168.1.11" in str(model_url) or
+                "localhost" in str(model_url)):
+                logger.warning(f"Ollama模型测试失败，但继续处理: {str(test_error)}")
+                # 对于Ollama模型，使用默认维度或推测维度
+                if "nomic" in model_name.lower():
+                    VECTOR_DIM = 768  # nomic-embed-text的常见维度
+                    logger.info(f"使用Ollama模型默认维度: {VECTOR_DIM}")
+            else:
+                # 对于非Ollama模型，记录警告但不抛出异常
+                logger.warning(f"OpenAI模型测试失败，但继续处理: {str(test_error)}")
+            
         logger.info(f"嵌入模型创建成功: {model_name}")
+        
     except Exception as e:
         logger.error(f"嵌入模型创建失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"嵌入模型初始化失败: {str(e)}")
+        # 提供更详细的错误信息
+        error_details = [
+            f"模型名称: {model_name}",
+            f"API Key 状态: {'已配置' if api_key else '未配置'}",
+            f"基础URL: {model_url or '默认'}",
+            f"原始错误: {str(e)}"
+        ]
+        raise HTTPException(
+            status_code=500, 
+            detail=f"嵌入模型初始化失败: {'; '.join(error_details)}"
+        )
     
     return texts, embeddings
 
@@ -219,3 +335,4 @@ async def save_uploaded_file(file, storage_type: Optional[str] = None, folder_pa
     except Exception as e:
         logger.error(f"文件保存失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
+

@@ -31,7 +31,7 @@ logger = get_logger("auth_service")
 # ====================
 
 # OAuth2密码模式配置
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 
 # 密码加密上下文配置
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

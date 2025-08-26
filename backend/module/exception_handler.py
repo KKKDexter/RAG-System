@@ -7,7 +7,12 @@
 版本: 1.0
 """
 
+# ✅ 修复 functools.iscoroutinefunction 兼容性问题
+import inspect
 import functools
+if not hasattr(functools, "iscoroutinefunction"):
+    functools.iscoroutinefunction = inspect.iscoroutinefunction
+
 from typing import Any, Callable, Dict, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError

@@ -64,29 +64,52 @@ def connect_to_milvus(max_retries: int = 3) -> bool:
     
     return False
 
-# 创建用户集合
-def create_user_collection(user_id: int) -> str:
+# 创建用户集合（支持动态向量维度）
+def create_user_collection(user_id: int, vector_dim: int = None) -> str:
     collection_name = f"docs_user_{user_id}"
-    logger.info(f"为用户 {user_id} 创建/检查Milvus集合: {collection_name}")
+    actual_dim = vector_dim or VECTOR_DIM
+    logger.info(f"为用户 {user_id} 创建/检查Milvus集合: {collection_name}，向量维度: {actual_dim}")
     
     try:
         # 检查集合是否已存在
         if utility.has_collection(collection_name):
-            logger.warning(f"集合 {collection_name} 已存在，直接返回")
-            return collection_name
+            # 检查现有集合的维度是否匹配
+            existing_collection = Collection(name=collection_name)
+            existing_schema = existing_collection.schema
+            
+            # 查找向量字段的维度
+            vector_field = None
+            for field in existing_schema.fields:
+                if field.name == "vector":
+                    vector_field = field
+                    break
+            
+            if vector_field and hasattr(vector_field, 'params'):
+                existing_dim = vector_field.params.get('dim', VECTOR_DIM)
+                if existing_dim != actual_dim:
+                    logger.warning(f"集合 {collection_name} 存在但维度不匹配（期望 {actual_dim}，实际 {existing_dim}），将删除并重建")
+                    # 删除现有集合
+                    utility.drop_collection(collection_name)
+                    logger.info(f"已删除维度不匹配的集合: {collection_name}")
+                else:
+                    logger.info(f"集合 {collection_name} 已存在且维度匹配，直接返回")
+                    return collection_name
+            else:
+                logger.warning(f"无法获取集合 {collection_name} 的向量维度信息，假设匹配")
+                return collection_name
         
         # 创建集合
-        logger.debug(f"开始创建集合: {collection_name}")
+        logger.debug(f"开始创建集合: {collection_name}，向量维度: {actual_dim}")
         fields = [
             FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
             FieldSchema(name="document_id", dtype=DataType.INT64),
             FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
+            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=actual_dim),
         ]
         
-        schema = CollectionSchema(fields, description=f"User {user_id} documents collection")
+        schema = CollectionSchema(fields, description=f"User {user_id} documents collection (dim={actual_dim})")
         collection = Collection(name=collection_name, schema=schema)
-        logger.info(f"集合 {collection_name} 创建成功")
+        logger.info(f"集合 {collection_name} 创建成功，向量维度: {actual_dim}")
         
         # 创建索引
         logger.debug(f"为集合 {collection_name} 创建向量索引")

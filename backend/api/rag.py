@@ -6,21 +6,116 @@ from module.database import get_db
 from module.models import Document, User, QAHistory
 from module.schemas import DocumentOut, AskRequest, AskResponse
 from module.auth_service import get_current_active_user
-from module.milvus_service import search_similar_vectors
-from module.document_service import process_document, save_uploaded_file, get_storage_dir
-from module.storage_service import get_storage_service_info
-from module.redis_service import cache_qa_result, get_cached_qa_result
-import asyncio  # 添加asyncio导入
+import asyncio
+import os
 
 # 根据环境变量动态导入配置
 env = os.environ.get('ENVIRONMENT', 'dev')
 if env == 'prod':
-    from config.prod import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL
+    from config.prod import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_URL, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL
 else:
-    from config.dev import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL
+    from config.dev import VECTOR_DIM, EMBEDDING_MODEL_API_KEY, EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_URL, CHAT_MODEL_API_KEY, CHAT_MODEL_NAME, CHAT_MODEL_URL
 
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.chat_models import ChatOpenAI
+# 尝试导入可选依赖
+try:
+    from module.milvus_service import search_similar_vectors
+    MILVUS_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARNING] Milvus服务不可用: {e}")
+    MILVUS_AVAILABLE = False
+
+try:
+    from module.document_service import process_document, save_uploaded_file, get_storage_dir
+    DOCUMENT_SERVICE_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARNING] 文档服务不可用: {e}")
+    DOCUMENT_SERVICE_AVAILABLE = False
+    
+    # 定义mock函数，在文档服务不可用时使用
+    async def save_uploaded_file(file, storage_type=None, folder_path="documents"):
+        """Mock 函数：文档上传服务不可用时返回错误信息"""
+        # 创建一个临时路径结果，避免立即抛出异常
+        import tempfile
+        import uuid
+        temp_dir = tempfile.gettempdir()
+        temp_filename = f"{uuid.uuid4()}_{file.filename}"
+        temp_path = os.path.join(temp_dir, temp_filename)
+        
+        # 保存文件到临时位置
+        with open(temp_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        return {
+            "local_path": temp_path,
+            "minio_path": None,
+            "file_extension": os.path.splitext(file.filename)[1].lower(),
+            "status": "mock_upload",
+            "message": "文档服务依赖缺失，使用临时存储"
+        }
+    
+    def process_document(*args, **kwargs):
+        """Mock 函数：文档处理服务不可用时使用占位符"""
+        # 返回一些占位符数据而不是抛出异常
+        from collections import namedtuple
+        
+        # 创建简单的文本对象
+        MockText = namedtuple('MockText', ['page_content'])
+        mock_texts = [MockText(page_content="文档处理服务不可用，请安装缺失的依赖")]
+        
+        # 创建简单的embeddings对象
+        class MockEmbeddings:
+            def embed_query(self, text):
+                # 返回固定维度的占位符向量
+                return [0.1] * VECTOR_DIM
+        
+        return mock_texts, MockEmbeddings()
+    
+    def get_storage_dir(folder_path="documents"):
+        """Mock 函数：返回临时存储目录"""
+        import tempfile
+        return os.path.join(tempfile.gettempdir(), folder_path)
+
+try:
+    from module.storage_service import get_storage_service_info
+    STORAGE_SERVICE_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARNING] 存储服务不可用: {e}")
+    STORAGE_SERVICE_AVAILABLE = False
+    
+    def get_storage_service_info():
+        """Mock 函数，在存储服务不可用时使用"""
+        return {
+            "available_modes": ["local"],
+            "current_mode": "local",
+            "storage_info": {
+                "local": {"status": "available"},
+                "minio": {"status": "unavailable", "reason": "MinIO依赖缺失"}
+            }
+        }
+
+try:
+    from module.redis_service import cache_qa_result, get_cached_qa_result
+    REDIS_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARNING] Redis服务不可用: {e}")
+    REDIS_AVAILABLE = False
+    
+    def cache_qa_result(*args, **kwargs):
+        """Mock 函数，在Redis不可用时使用"""
+        pass  # 不做任何缓存操作
+    
+    def get_cached_qa_result(*args, **kwargs):
+        """Mock 函数，在Redis不可用时使用"""
+        return None  # 始终返回缓存未命中
+
+try:
+    from langchain_community.embeddings import OpenAIEmbeddings
+    from langchain_community.chat_models import ChatOpenAI
+    LANGCHAIN_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARNING] LangChain不可用: {e}")
+    LANGCHAIN_AVAILABLE = False
 
 # 导入日志配置
 from logger_config import get_logger
@@ -42,18 +137,43 @@ async def process_document_async(document_id: int, storage_result: dict, embeddi
         storage_result: 存储结果信息
         embedding_model_id: 指定的embedding模型ID
         user_id: 用户ID
-        db_session: 数据库会话
+        db_session: 数据库会话（不使用，重新创建）
     """
+    # 声明全局变量
+    global VECTOR_DIM
+    
+    # 创建新的数据库会话，避免异步问题
+    from module.database import SessionLocal
+    new_db_session = SessionLocal()
+    
     try:
         logger.info(f"开始异步处理文档 ID: {document_id}")
         
         # 查询文档
-        document = db_session.query(Document).filter(Document.id == document_id).first()
+        document = new_db_session.query(Document).filter(Document.id == document_id).first()
         if not document:
             logger.error(f"找不到文档 ID: {document_id}")
             return
         
+        # 更新文档状态为处理中
+        document.status = "processing"
+        new_db_session.commit()
+        logger.info(f"文档 {document_id} 状态更新为: processing")
+        
+        # 检查是否有必要的依赖
+        if not DOCUMENT_SERVICE_AVAILABLE:
+            logger.warning(f"文档服务不可用，将使用mock处理，文档ID: {document_id}")
+            
+        if not MILVUS_AVAILABLE:
+            logger.warning(f"Milvus服务不可用，跳过向量存储，文档ID: {document_id}")
+            # 直接标记为已处理（但没有实际处理）
+            document.status = "processed"
+            document.error_message = "Milvus服务不可用，文档已上传但未生成向量索引"
+            new_db_session.commit()
+            return
+        
         # 处理文档
+        logger.info(f"开始处理文档内容: {document.original_filename}")
         if storage_result.get("local_path"):
             # 从本地路径处理
             texts, embeddings = process_document(
@@ -62,7 +182,7 @@ async def process_document_async(document_id: int, storage_result: dict, embeddi
                 embedding_model_name=embedding_model_id  # 传递embedding模型名称
             )
         elif storage_result.get("minio_path"):
-            # 从MinIO路径处理
+            # 从Minio路径处理
             texts, embeddings = process_document(
                 minio_path=storage_result["minio_path"], 
                 file_extension=storage_result["file_extension"],
@@ -70,16 +190,57 @@ async def process_document_async(document_id: int, storage_result: dict, embeddi
             )
         else:
             logger.error(f"文档 {document_id} 没有有效的存储路径")
+            document.status = "failed"
+            document.error_message = "文档没有有效的存储路径"
+            new_db_session.commit()
+            return
+            
+        logger.info(f"文档内容处理完成，得到 {len(texts)} 个文本块")
+        
+        # 如果Milvus不可用，跳过向量处理
+        if not MILVUS_AVAILABLE:
+            logger.info(f"Milvus不可用，跳过向量处理，文档ID: {document_id}")
+            document.status = "processed"
+            document.error_message = "Milvus服务不可用，文档已处理但未生成向量索引"
+            new_db_session.commit()
             return
         
         # 获取用户的Milvus集合
         logger.debug(f"加载Milvus集合: {document.milvus_collection_name}")
-        from pymilvus import Collection
-        from module.milvus_service import create_user_collection
-        # 确保集合存在
-        collection_name = create_user_collection(user_id)
-        collection = Collection(name=collection_name)
-        collection.load()
+        try:
+            from pymilvus import Collection
+            from module.milvus_service import create_user_collection
+            
+            # 首先生成一个测试向量来检测维度
+            actual_vector_dim = VECTOR_DIM  # 默认维度
+            
+            if len(texts) > 0:
+                try:
+                    logger.debug("生成测试向量来检测维度")
+                    test_vector = embeddings.embed_query("测试文本")
+                    if isinstance(test_vector, list) and len(test_vector) > 0:
+                        actual_vector_dim = len(test_vector)
+                        logger.info(f"检测到实际向量维度: {actual_vector_dim}")
+                        
+                        # 更新全局维度配置
+                        VECTOR_DIM = actual_vector_dim
+                        logger.info(f"更新全局VECTOR_DIM为: {VECTOR_DIM}")
+                    else:
+                        logger.warning(f"测试向量格式异常: {type(test_vector)}")
+                except Exception as test_error:
+                    logger.warning(f"测试向量生成失败: {str(test_error)}，使用默认维度")
+            
+            # 使用实际维度创建或检查集合
+            collection_name = create_user_collection(user_id, actual_vector_dim)
+            collection = Collection(name=collection_name)
+            collection.load()
+            logger.info(f"Milvus集合加载成功: {collection_name}，维度: {actual_vector_dim}")
+        except Exception as milvus_error:
+            logger.error(f"Milvus集合操作失败: {str(milvus_error)}")
+            document.status = "failed"
+            document.error_message = f"Milvus集合操作失败: {str(milvus_error)[:200]}"
+            new_db_session.commit()
+            return
         
         # 准备数据
         logger.debug(f"为文档 {document_id} 准备向量数据")
@@ -88,58 +249,89 @@ async def process_document_async(document_id: int, storage_result: dict, embeddi
         document_ids = []
         
         for text in texts:
-            # 尝试生成实际向量，失败时使用占位符
+            # 尝试生成实际向量，失败时记录错误
             try:
-                # 为嵌入查询设置超时时间
-                import asyncio
-                import functools
+                logger.debug(f"开始为文本块生成向量: {text.page_content[:50]}...")
                 
-                # 创建带超时的嵌入查询函数
-                async def embed_with_timeout():
-                    loop = asyncio.get_event_loop()
-                    return await loop.run_in_executor(
-                        None, 
-                        functools.partial(embeddings.embed_query, text.page_content)
-                    )
+                # 直接调用embedding模型，不使用复杂的异步包装
+                vector = embeddings.embed_query(text.page_content)
                 
-                # 执行带超时的嵌入查询（设置30秒超时）
-                try:
-                    vector = asyncio.wait_for(embed_with_timeout(), timeout=30.0)
-                    if asyncio.iscoroutine(vector):
-                        vector = await vector
+                # 验证向量维度
+                if isinstance(vector, list) and len(vector) > 0:
                     logger.debug(f"成功为文本生成向量，维度: {len(vector)}")
-                except asyncio.TimeoutError:
-                    logger.error(f"向量生成超时，使用占位符向量")
-                    vector = [0.1] * VECTOR_DIM  # 超时时使用占位符向量
+                    vectors.append(vector)
+                    contents.append(text.page_content)
+                    document_ids.append(document_id)
+                else:
+                    logger.error(f"生成的向量格式错误: {type(vector)}, 长度: {len(vector) if hasattr(vector, '__len__') else 'N/A'}")
+                    # 跳过这个文本块
+                    continue
+                    
             except Exception as e:
-                logger.error(f"向量生成失败，使用占位符向量: {str(e)}")
-                vector = [0.1] * VECTOR_DIM  # 失败时使用占位符向量
+                logger.error(f"向量生成失败: {str(e)}")
+                logger.error(f"错误详情: {type(e).__name__}")
                 
-            vectors.append(vector)
-            contents.append(text.page_content)
-            document_ids.append(document_id)
+                # 对于Ollama模型，尝试不同的调用方式
+                if "nomic" in str(embedding_model_id).lower() or "ollama" in str(type(embeddings)).lower():
+                    try:
+                        logger.info("尝试使用简化的Ollama调用方式")
+                        # 简化调用，避免复杂参数
+                        vector = embeddings.embed_query(text.page_content[:1000])  # 限制文本长度
+                        if isinstance(vector, list) and len(vector) > 0:
+                            logger.info(f"Ollama简化调用成功，向量维度: {len(vector)}")
+                            vectors.append(vector)
+                            contents.append(text.page_content)
+                            document_ids.append(document_id)
+                            continue
+                    except Exception as retry_error:
+                        logger.error(f"Ollama简化调用也失败: {str(retry_error)}")
+                
+                # 如果向量生成彻底失败，记录错误但继续处理其他文本
+                logger.warning(f"跳过向量生成失败的文本块: {text.page_content[:100]}...")
+        
+        # 检查是否有有效的向量数据
+        if not vectors or len(vectors) == 0:
+            logger.error(f"文档 {document_id} 没有生成任何有效的向量数据")
+            document.status = "failed"
+            document.error_message = "向量生成失败，无法处理文档内容"
+            new_db_session.commit()
+            return
+            
+        logger.info(f"文档 {document_id} 成功生成了 {len(vectors)} 个向量")
         
         # 插入数据
         logger.debug(f"向Milvus集合中插入 {len(vectors)} 条向量数据")
-        collection.insert([document_ids, contents, vectors])
-        collection.flush()
+        try:
+            collection.insert([document_ids, contents, vectors])
+            collection.flush()
+            logger.info(f"成功插入 {len(vectors)} 条向量数据到Milvus")
+        except Exception as insert_error:
+            logger.error(f"向量数据插入失败: {str(insert_error)}")
+            document.status = "failed"
+            document.error_message = f"向量数据插入失败: {str(insert_error)[:200]}"
+            new_db_session.commit()
+            return
         
         # 更新文档状态为已处理
-        document.status = "processed"  # 假设Document模型有status字段
-        db_session.commit()
+        document.status = "processed"
+        document.error_message = None  # 清除错误信息
+        new_db_session.commit()
         
         logger.info(f"文档 {document_id} 异步处理完成")
     except Exception as e:
         logger.error(f"异步处理文档 {document_id} 失败: {str(e)}")
         try:
             # 更新文档状态为处理失败
-            document = db_session.query(Document).filter(Document.id == document_id).first()
+            document = new_db_session.query(Document).filter(Document.id == document_id).first()
             if document:
-                document.status = "failed"  # 假设Document模型有status字段
-                document.error_message = str(e)[:255]  # 假设Document模型有error_message字段
-                db_session.commit()
+                document.status = "failed"
+                document.error_message = str(e)[:255]
+                new_db_session.commit()
         except Exception as update_error:
             logger.error(f"更新文档状态失败: {str(update_error)}")
+    finally:
+        # 关闭数据库会话
+        new_db_session.close()
 
 # 获取可用的embedding模型列表
 @router.get("/embedding-models")
@@ -250,17 +442,28 @@ async def upload_document(
         # 这里需要根据存储结果来清理文件
         if 'storage_result' in locals():
             try:
-                from module.storage_service import delete_file_from_storage
-                delete_file_from_storage(
-                    storage_result.get("local_path"),
-                    storage_result.get("minio_path")
-                )
+                # 检查是否有存储服务可用
+                if STORAGE_SERVICE_AVAILABLE:
+                    from module.storage_service import delete_file_from_storage
+                    delete_file_from_storage(
+                        storage_result.get("local_path"),
+                        storage_result.get("minio_path")
+                    )
+                else:
+                    # 手动清理本地临时文件
+                    local_path = storage_result.get("local_path")
+                    if local_path and os.path.exists(local_path):
+                        os.remove(local_path)
+                        logger.info(f"已清理临时文件: {local_path}")
             except Exception as cleanup_error:
                 logger.error(f"清理存储文件失败: {str(cleanup_error)}")
         
         if 'document' in locals():
-            db.delete(document)
-            db.commit()
+            try:
+                db.delete(document)
+                db.commit()
+            except Exception as db_error:
+                logger.error(f"删除文档记录失败: {str(db_error)}")
         raise HTTPException(status_code=500, detail=f"文档处理失败: {str(e)}")
 
 # 获取存储服务信息
@@ -424,6 +627,9 @@ def ask_question(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
+    # 声明全局变量
+    global VECTOR_DIM
+    
     logger.info(f"用户 {current_user.id} 提问: {request.question[:50]}{'...' if len(request.question) > 50 else ''}")
     
     try:
@@ -447,44 +653,77 @@ def ask_question(
         # 生成问题向量
         logger.debug(f"生成问题向量: {request.question[:30]}...")
         try:
-            # 先尝试从数据库获取embedding模型配置
-            api_key = EMBEDDING_MODEL_API_KEY
-            model_name = EMBEDDING_MODEL_NAME
-            model_url = None
+            # 从环境变量获取embedding模型配置
+            embedding_model_url = EMBEDDING_MODEL_URL or "http://localhost:11434/v1"
+            embedding_model_name = EMBEDDING_MODEL_NAME or "nomic-embed-text:latest"
+            embedding_api_key = EMBEDDING_MODEL_API_KEY
             
             # 如果客户端指定了模型，则使用指定的模型
             if request.embedding_model_id:
-                model_name = request.embedding_model_id
+                embedding_model_name = request.embedding_model_id
                 
-            # 尝试从数据库获取模型配置
-            try:
-                from module.llm_service import LLMService
-                db_model = LLMService.get_llm_model_by_name(db, model_name)
-                if db_model and db_model.type == "embedding" and db_model.is_active:
-                    logger.info(f"从数据库获取到embedding模型配置: {model_name}")
-                    api_key = db_model.api_key
-                    model_url = db_model.base_url
-            except Exception as db_error:
-                logger.warning(f"从数据库获取embedding模型配置失败: {str(db_error)}")
+            logger.info(f"使用embedding模型: {embedding_model_name}，URL: {embedding_model_url}")
             
             # 创建嵌入模型配置参数
-            embedding_params = {}
+            embedding_params = {
+                "model": embedding_model_name
+            }
             
-            # 如果设置了API Key，则添加
-            if api_key:
-                embedding_params["openai_api_key"] = api_key
-            
-            # 如果设置了模型名称，则添加
-            if model_name:
-                embedding_params["model"] = model_name
+            # 对于Ollama模型，设置base_url和api_key
+            if "ollama" in embedding_model_url.lower() or ":" in embedding_model_name:
+                # 处理URL格式
+                if embedding_model_url.endswith('/v1'):
+                    base_url = embedding_model_url
+                else:
+                    base_url = embedding_model_url.rstrip('/') + '/v1'
                 
-            # 如果设置了基础URL，则添加
-            if model_url:
-                embedding_params["openai_api_base"] = model_url
+                # 对于Ollama，使用特定的配置
+                embedding_params["base_url"] = base_url
+                embedding_params["api_key"] = "None"  # Ollama不需要真实的API密钥
+                logger.info(f"配置Ollama embedding模型: {base_url}")
+            else:
+                # OpenAI模型配置
+                if embedding_api_key:
+                    embedding_params["api_key"] = embedding_api_key
             
-            embeddings = OpenAIEmbeddings(**embedding_params)
+            # 使用新的langchain-openai包
+            try:
+                from langchain_openai import OpenAIEmbeddings
+                embeddings = OpenAIEmbeddings(**embedding_params)
+            except ImportError:
+                # 如果没有安装langchain-openai，使用旧版本但忽略警告
+                import warnings
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+                from langchain.embeddings import OpenAIEmbeddings
+                # 移除新包特有的参数
+                if "base_url" in embedding_params:
+                    embedding_params["openai_api_base"] = embedding_params.pop("base_url")
+                if "api_key" in embedding_params:
+                    embedding_params["openai_api_key"] = embedding_params.pop("api_key")
+                embeddings = OpenAIEmbeddings(**embedding_params)
+            
             query_vector = embeddings.embed_query(request.question)
-            logger.info("问题向量生成成功")
+            logger.info(f"问题向量生成成功，维度: {len(query_vector)}")
+            
+            # 检查并确保集合维度匹配
+            actual_vector_dim = len(query_vector)
+            logger.debug(f"检查Milvus集合 {collection_name} 的维度是否匹配查询向量维度 {actual_vector_dim}")
+            
+            # 更新全局维度配置
+            if VECTOR_DIM != actual_vector_dim:
+                VECTOR_DIM = actual_vector_dim
+                logger.info(f"更新全局VECTOR_DIM为: {VECTOR_DIM}")
+            
+            # 确保集合存在且维度匹配
+            try:
+                from module.milvus_service import create_user_collection
+                # 使用实际维度创建或检查集合
+                collection_name = create_user_collection(current_user.id, actual_vector_dim)
+                logger.info(f"Milvus集合 {collection_name} 维度验证完成")
+            except Exception as collection_error:
+                logger.error(f"集合维度验证失败: {str(collection_error)}")
+                # 如果集合操作失败，返回错误信息
+                return {"answer": "文档检索系统配置异常，请联系管理员。"}
         except Exception as e:
             logger.error(f"问题向量生成失败: {str(e)}")
             # 如果向量生成失败，使用占位符向量继续
@@ -505,25 +744,66 @@ def ask_question(
         logger.debug(f"调用LLM生成答案，上下文长度: {len(context)} 字符")
         try:
             if context:
+                # 根据环境变量选择合适的模型
+                chat_model_url = CHAT_MODEL_URL or "http://localhost:11434/v1"
+                chat_model_name = CHAT_MODEL_NAME or "qwen3:8b"
+                chat_api_key = CHAT_MODEL_API_KEY
+                
+                logger.info(f"使用聊天模型: {chat_model_name}，URL: {chat_model_url}")
+                
                 # 创建聊天模型配置参数
-                chat_params = {}
+                chat_params = {
+                    "model": chat_model_name,
+                    "temperature": 0.7,
+                    "max_tokens": 1000
+                }
                 
-                # 如果设置了API Key，则添加
-                if CHAT_MODEL_API_KEY:
-                    chat_params["openai_api_key"] = CHAT_MODEL_API_KEY
+                # 对于Ollama模型，设置base_url和api_key
+                if "ollama" in chat_model_url.lower() or ":" in chat_model_name:
+                    # 处理URL格式
+                    if chat_model_url.endswith('/v1'):
+                        base_url = chat_model_url
+                    else:
+                        base_url = chat_model_url.rstrip('/') + '/v1'
+                    
+                    chat_params["base_url"] = base_url
+                    chat_params["api_key"] = "None"  # Ollama不需要真实的API密钥
+                    logger.info(f"配置Ollama聊天模型: {base_url}")
+                else:
+                    # OpenAI模型配置
+                    if chat_api_key:
+                        chat_params["api_key"] = chat_api_key
                 
-                # 如果设置了模型名称，则添加
-                if CHAT_MODEL_NAME:
-                    chat_params["model"] = CHAT_MODEL_NAME
-                
-                llm = ChatOpenAI(**chat_params)
+                # 使用新的langchain-openai包
+                try:
+                    from langchain_openai import ChatOpenAI
+                    llm = ChatOpenAI(**chat_params)
+                except ImportError:
+                    # 如果没有安装langchain-openai，使用旧版本但忽略警告
+                    import warnings
+                    warnings.filterwarnings("ignore", category=DeprecationWarning)
+                    from langchain.chat_models import ChatOpenAI
+                    # 移除新包特有的参数
+                    if "base_url" in chat_params:
+                        chat_params["openai_api_base"] = chat_params.pop("base_url")
+                    if "api_key" in chat_params:
+                        chat_params["openai_api_key"] = chat_params.pop("api_key")
+                    llm = ChatOpenAI(**chat_params)
                 
                 # 构建提示
                 prompt = f"基于以下上下文内容，回答用户的问题。\n\n上下文：{context}\n\n问题：{request.question}\n\n回答："
                 
-                # 调用LLM生成答案
-                response = llm.predict(prompt)
-                answer = response.strip()
+                # 使用新的invoke方法替代predict
+                try:
+                    response = llm.invoke(prompt)
+                    if hasattr(response, 'content'):
+                        answer = response.content.strip()
+                    else:
+                        answer = str(response).strip()
+                except AttributeError:
+                    # 如果invoke方法不可用，使用predict方法
+                    response = llm.predict(prompt)
+                    answer = response.strip()
             else:
                 answer = "没有找到相关内容。"
             

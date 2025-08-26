@@ -87,6 +87,15 @@ def create_tables():
             # 尝试查询 system_configs 表
             db.execute("SELECT COUNT(*) FROM system_configs")
             print("[OK] system_configs 表验证成功")
+            
+            # 检查 documents 表的字段结构，确保包含最新字段
+            try:
+                db.execute("SELECT status, error_message FROM documents LIMIT 1")
+                print("[OK] documents 表字段验证成功（包含 status 和 error_message）")
+            except Exception as e:
+                print(f"[WARNING] documents 表可能缺少新字段: {e}")
+                print("[INFO] 如果遇到字段缺失错误，请运行: python migrate_documents.py")
+                
         except Exception as e:
             print(f"[WARNING] system_configs 表验证失败: {e}")
         finally:
