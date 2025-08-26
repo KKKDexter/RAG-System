@@ -1,13 +1,20 @@
 import os
-import uuid
-import asyncio
-from typing import Tuple, List, Optional
+import tempfile
+from typing import List, Tuple, Optional
 from fastapi import HTTPException
-# 修复弃用的导入路径
-from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
+
+# 导入文档加载器
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    Docx2txtLoader
+)
+
+# 导入文本分割器
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.chat_models import ChatOpenAI
+
+# 导入嵌入模型 - 使用新的导入方式
+from langchain_openai import OpenAIEmbeddings
 
 # 导入统一存储服务
 from module.storage_service import save_file_to_storage, get_file_from_storage
@@ -161,7 +168,11 @@ def process_document(file_path: str = None, minio_path: str = None, file_extensi
         # 如果设置了基础URL，则添加
         if model_url:
             embedding_params["openai_api_base"] = model_url
+            
+        # 设置默认的请求超时时间
+        embedding_params["request_timeout"] = 30  # 30秒超时
         
+        # 创建嵌入模型实例
         embeddings = OpenAIEmbeddings(**embedding_params)
         logger.info(f"嵌入模型创建成功: {model_name}")
     except Exception as e:

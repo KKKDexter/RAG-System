@@ -32,10 +32,17 @@ router = APIRouter(
     tags=["RAG"],
 )
 
-# 异步处理文档函数
-async def process_document_async(document_id: int, storage_result: dict, embedding_model_id: Optional[str], user_id: int, db_session: Session):
+# 异步处理文档
+async def process_document_async(document_id: int, storage_result: dict, embedding_model_id: str, user_id: int, db_session: Session):
     """
-    异步处理文档向量化和存储
+    异步处理文档，包括文本分割、向量生成和存储到Milvus
+    
+    Args:
+        document_id: 文档ID
+        storage_result: 存储结果信息
+        embedding_model_id: 指定的embedding模型ID
+        user_id: 用户ID
+        db_session: 数据库会话
     """
     try:
         logger.info(f"开始异步处理文档 ID: {document_id}")
@@ -83,8 +90,27 @@ async def process_document_async(document_id: int, storage_result: dict, embeddi
         for text in texts:
             # 尝试生成实际向量，失败时使用占位符
             try:
-                vector = embeddings.embed_query(text.page_content)
-                logger.debug(f"成功为文本生成向量，维度: {len(vector)}")
+                # 为嵌入查询设置超时时间
+                import asyncio
+                import functools
+                
+                # 创建带超时的嵌入查询函数
+                async def embed_with_timeout():
+                    loop = asyncio.get_event_loop()
+                    return await loop.run_in_executor(
+                        None, 
+                        functools.partial(embeddings.embed_query, text.page_content)
+                    )
+                
+                # 执行带超时的嵌入查询（设置30秒超时）
+                try:
+                    vector = asyncio.wait_for(embed_with_timeout(), timeout=30.0)
+                    if asyncio.iscoroutine(vector):
+                        vector = await vector
+                    logger.debug(f"成功为文本生成向量，维度: {len(vector)}")
+                except asyncio.TimeoutError:
+                    logger.error(f"向量生成超时，使用占位符向量")
+                    vector = [0.1] * VECTOR_DIM  # 超时时使用占位符向量
             except Exception as e:
                 logger.error(f"向量生成失败，使用占位符向量: {str(e)}")
                 vector = [0.1] * VECTOR_DIM  # 失败时使用占位符向量
@@ -208,6 +234,7 @@ async def upload_document(
         logger.info(f"文档记录创建成功，文档ID: {document.id}")
         
         # 启动异步任务处理文档，但不等待其完成
+        import asyncio
         asyncio.create_task(process_document_async(
             document_id=document.id,
             storage_result=storage_result,

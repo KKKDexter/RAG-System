@@ -12,7 +12,7 @@ pydantic-core>=2.16.0,<3.0.0  # Pydantic V2 核心库
 langchain>=0.1.16,<0.3.0   # 选择明确支持 Pydantic V2 的现代版本
 langchain-community>=0.0.30,<0.3.0 # 常用的集成包
 langchain-core>=0.1.47,<0.3.0     # 核心包 (如果需要)
-# langchain-openai        # 如果使用 OpenAI, 可以单独添加
+langchain-openai>=0.1.0,<0.2.0    # OpenAI集成包，解决OpenAIEmbeddings弃用问题
 
 # 数据库与 ORM
 sqlalchemy>=2.0.0,<3.0.0   # 保持在 2.x 系列，与你的代码兼容
