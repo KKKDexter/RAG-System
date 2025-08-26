@@ -1,18 +1,26 @@
 # 开发环境配置
 import os
+from typing import Any
 from dotenv import load_dotenv
 
 # 加载.env文件中的环境变量 - 使用项目根目录下的.env文件
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
 load_dotenv(dotenv_path=env_path)
 
-# 安全配置
-SECRET_KEY = os.getenv("SECRET_KEY", "02lkAtLdaHZbln18tm37mAGdgo90wke8")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+# 注意：安全令牌配置（SECRET_KEY、ALGORITHM、ACCESS_TOKEN_EXPIRE_MINUTES）
+# 已完全迁移到数据库中，不再从配置文件加载
+# 请使用 /v1/config/ API 或者数据库直接管理这些配置
 
 # 数据库配置
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root:password@localhost/rag_system")
+# 从环境变量读取分开的数据库连接参数
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASS = os.getenv("DB_PASS", "password")
+DB_NAME = os.getenv("DB_NAME", "rag_system")
+DB_PORT = os.getenv("DB_PORT", "3306")
+
+# 构建 DATABASE_URL
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Milvus配置
 MILVUS_HOST = os.getenv("MILVUS_HOST", "localhost")
@@ -26,7 +34,7 @@ REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
 REDIS_DB = int(os.getenv('REDIS_DB', '0'))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', "")
 
-# 文档处理配置
+# 文档处理配置（从.env文件读取）
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 VECTOR_DIM = int(os.getenv("VECTOR_DIM", "1536"))  # OpenAI嵌入向量维度

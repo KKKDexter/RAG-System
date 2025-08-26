@@ -1,13 +1,21 @@
 # 生产环境配置
-
-# 安全配置
 import os
-SECRET_KEY = os.environ.get("SECRET_KEY", "your-secure-production-key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 生产环境token有效期更长
+from typing import Any
+
+# 注意：安全令牌配置（SECRET_KEY、ALGORITHM、ACCESS_TOKEN_EXPIRE_MINUTES）
+# 已完全迁移到数据库中，不再从配置文件或环境变量加载
+# 请使用 /v1/config/ API 或者数据库直接管理这些配置
 
 # 数据库配置
-DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+pymysql://production_user:production_password@db-host/rag_system_prod")
+# 从环境变量读取分开的数据库连接参数
+DB_HOST = os.environ.get("DB_HOST", "db-host")
+DB_USER = os.environ.get("DB_USER", "production_user")
+DB_PASS = os.environ.get("DB_PASS", "production_password")
+DB_NAME = os.environ.get("DB_NAME", "rag_system_prod")
+DB_PORT = os.environ.get("DB_PORT", "3306")
+
+# 构建 DATABASE_URL
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Milvus配置
 MILVUS_HOST = os.environ.get("MILVUS_HOST", "milvus-host")
@@ -21,10 +29,10 @@ REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 REDIS_DB = int(os.environ.get('REDIS_DB', 1))
 REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
 
-# 文档处理配置
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
-VECTOR_DIM = 1536  # OpenAI嵌入向量维度
+# 文档处理配置（从环境变量读取）
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "1000"))
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "200"))
+VECTOR_DIM = int(os.environ.get("VECTOR_DIM", "1536"))  # OpenAI嵌入向量维度
 
 # 模型配置 - 生产环境
 # Chat模型配置

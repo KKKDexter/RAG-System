@@ -44,19 +44,23 @@
       <el-upload
         class="upload-demo"
         ref="uploadRef"
-        :file-list="fileList"
+        v-model:file-list="fileList"
         :auto-upload="false"
         :multiple="true"
         accept=".pdf,.docx,.doc,.txt"
         drag
         :disabled="isUploading"
+        @change="handleFileChange"
+        @remove="handleFileRemove"
+        action="#"
       >
         <el-icon class="el-icon--upload"><Upload /></el-icon>
         <div class="el-upload__text">
           点击或拖拽文件到此区域选择
         </div>
-        <div class="el-upload__tip" slot="tip">
-          支持 .pdf, .docx, .doc, .txt 格式的文件，单个文件大小不超过10MB，可选择多个文件
+        <div class="el-upload__tip">
+          支持 .pdf, .docx, .doc, .txt 格式的文件，<strong>单个文件大小不超过10MB</strong>，可选择多个文件。
+          <br/>大文件上传可能需要较长时间，请耐心等待。
         </div>
       </el-upload>
       
@@ -133,6 +137,23 @@
         <el-table-column prop="original_filename" label="文件名" min-width="200">
           <template #default="{ row }">
             <el-link type="primary" @click="viewDocument(row)">{{ row.original_filename }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag 
+              :type="getStatusType(row.status)" 
+              size="small"
+            >
+              {{ getStatusText(row.status) }}
+            </el-tag>
+            <el-tooltip 
+              v-if="row.error_message" 
+              :content="row.error_message" 
+              placement="top"
+            >
+              <el-icon class="error-icon"><Warning /></el-icon>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column prop="uploaded_at" label="上传时间" width="180">
@@ -241,18 +262,20 @@
         :http-request="handleUpdateFileHttpRequest"
         :on-success="handleUpdateFileSuccess"
         :on-error="handleUpdateFileError"
-        :file-list="updateFileList"
+        v-model:file-list="updateFileList"
         :auto-upload="false"
         accept=".pdf,.docx,.doc,.txt"
         drag
         :limit="1"
+        action="#"
       >
         <el-icon class="el-icon--upload"><Upload /></el-icon>
         <div class="el-upload__text">
           点击或拖拽文件到此区域上传
         </div>
-        <div class="el-upload__tip" slot="tip">
-          支持 .pdf, .docx, .doc, .txt 格式的文件，单个文件大小不超过10MB
+        <div class="el-upload__tip">
+          支持 .pdf, .docx, .doc, .txt 格式的文件，<strong>单个文件大小不超过10MB</strong>。
+          <br/>大文件更新可能需要较长时间，请耐心等待。
         </div>
       </el-upload>
       
@@ -267,9 +290,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, Loading, Check, Close, Document } from '@element-plus/icons-vue'
+import { Upload, Loading, Check, Close, Document, Warning } from '@element-plus/icons-vue'
 import { ragAPI } from '../utils/api.js'
 
 // 上传相关
@@ -280,6 +303,15 @@ const uploadProgress = ref(0)
 const isUploading = ref(false)
 const uploadedCount = ref(0)
 const totalCount = ref(0)
+
+// 监听showUploadDialog，每次打开对话框重置fileList
+watch(showUploadDialog, (newVal) => {
+  if (newVal) {
+    console.log('上传对话框打开，重置文件列表')
+    // 确保文件列表为空数组，不是null或undefined
+    fileList.value = []
+  }
+})
 
 // Embedding模型选择
 const embeddingModels = ref([])
@@ -329,6 +361,20 @@ const filteredDocuments = computed(() => {
 onMounted(() => {
   fetchDocuments()
   fetchEmbeddingModels()
+  
+  // 设置定时刷新
+  const refreshInterval = setInterval(() => {
+    // 只在有待处理或处理中的文档时才刷新
+    if (documents.value.some(doc => doc.status === 'pending' || doc.status === 'processing')) {
+      console.log('定时刷新文档列表')
+      fetchDocuments()
+    }
+  }, 10000) // 10秒刷新一次
+  
+  // 组件卸载时清除定时器
+  onUnmounted(() => {
+    clearInterval(refreshInterval)
+  })
 })
 
 // 获取文档列表
@@ -347,18 +393,58 @@ const fetchDocuments = async () => {
 // 获取可用的embedding模型列表
 const fetchEmbeddingModels = async () => {
   try {
-    embeddingModels.value = await ragAPI.getEmbeddingModels()
+    const response = await ragAPI.getEmbeddingModels()
+    // 检查返回格式，如果是{models:[...]}格式，则提取models数组
+    if (response && Array.isArray(response)) {
+      embeddingModels.value = response
+    } else if (response && response.models && Array.isArray(response.models)) {
+      embeddingModels.value = response.models
+    } else {
+      embeddingModels.value = []
+    }
     console.log('成功加载', embeddingModels.value.length, '个embedding模型')
+    console.log('模型数据:', embeddingModels.value)
   } catch (error) {
     console.error('获取embedding模型列表失败:', error)
+    embeddingModels.value = []
     // 错误处理已在api.js中完成
   }
 }
 
+// 文件变更处理
+const handleFileChange = (uploadFile, uploadFiles) => {
+  console.log('文件变更:', uploadFile)
+  console.log('当前文件列表:', uploadFiles)
+  
+  // 没有用v-model时才需要手动设置fileList
+  // fileList.value = uploadFiles
+}
+
+// 文件移除处理
+const handleFileRemove = (uploadFile, uploadFiles) => {
+  console.log('文件移除:', uploadFile)
+  console.log('当前文件列表:', uploadFiles)
+  
+  // 没有用v-model时才需要手动设置fileList
+  // fileList.value = uploadFiles
+}
+
 // 提交上传
 const submitUpload = async () => {
-  if (fileList.value.length === 0) {
+  console.log('开始上传文件')
+  console.log('文件列表:', fileList.value)
+  
+  if (!fileList.value || fileList.value.length === 0) {
     ElMessage.warning('请先选择要上传的文件')
+    return
+  }
+  
+  // 检查文件大小
+  const maxSizeMB = 10 // 最大文件大小限制，单位MB
+  const oversizedFiles = fileList.value.filter(file => file.size / 1024 / 1024 > maxSizeMB)
+  if (oversizedFiles.length > 0) {
+    const fileNames = oversizedFiles.map(f => f.name).join(', ')
+    ElMessage.error(`以下文件超过${maxSizeMB}MB大小限制: ${fileNames}`)
     return
   }
   
@@ -366,115 +452,70 @@ const submitUpload = async () => {
   uploadedCount.value = 0
   totalCount.value = fileList.value.length
   
-  // 初始化所有文件状态
-  fileList.value.forEach(file => {
-    file.status = 'waiting'
-  })
-  
   try {
-    // 使用Promise.all并发上传，但限制并发数量以避免过载
-    const batchSize = 3 // 同时最多上传3个文件
-    const batches = []
-    
-    for (let i = 0; i < fileList.value.length; i += batchSize) {
-      const batch = fileList.value.slice(i, i + batchSize)
-      batches.push(batch)
-    }
-    
-    let successCount = 0
-    let errorCount = 0
-    const uploadResults = []
-    
-    for (const batch of batches) {
-      const promises = batch.map(async (fileItem) => {
-        try {
-          // 设置文件状态为上传中
-          fileItem.status = 'uploading'
-          
-          const formData = new FormData()
-          formData.append('file', fileItem.raw)
-          
-          // 如果选择了embedding模型，则添加到请求中
-          if (selectedEmbeddingModelId.value) {
-            formData.append('embedding_model_id', selectedEmbeddingModelId.value)
-          }
-          
-          await ragAPI.uploadDocument(formData)
-          
-          // 上传成功
-          fileItem.status = 'success'
-          uploadedCount.value++
-          successCount++
-          uploadResults.push({ file: fileItem.name, success: true })
-          console.log(`文件 ${fileItem.name} 上传成功`)
-        } catch (error) {
-          // 上传失败
-          fileItem.status = 'error'
-          fileItem.errorMessage = error.response?.data?.detail || error.message || '上传失败'
-          errorCount++
-          uploadResults.push({ file: fileItem.name, success: false, error: fileItem.errorMessage })
-          console.error(`文件 ${fileItem.name} 上传失败:`, error)
+    // 每个文件单独上传
+    for (let i = 0; i < fileList.value.length; i++) {
+      const fileItem = fileList.value[i]
+      // 设置文件状态为上传中
+      fileItem.status = 'uploading'
+      
+      try {
+        const formData = new FormData()
+        formData.append('file', fileItem.raw)
+        
+        // 如果选择了embedding模型，则添加到请求中
+        if (selectedEmbeddingModelId.value) {
+          formData.append('embedding_model_id', selectedEmbeddingModelId.value)
         }
-      })
-      
-      await Promise.all(promises)
-    }
-    
-    // 等待一秒让用户看到完成状态
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 显示详细结果
-    if (errorCount === 0) {
-      ElMessage.success(`所有文件上传成功！共上传 ${successCount} 个文件`)
-    } else if (successCount > 0) {
-      const successFiles = uploadResults.filter(r => r.success).map(r => r.file)
-      const errorFiles = uploadResults.filter(r => !r.success)
-      
-      ElMessage({
-        type: 'warning',
-        duration: 6000,
-        dangerouslyUseHTMLString: true,
-        message: `
-          <div>
-            <p>部分文件上传成功：${successCount} 个成功，${errorCount} 个失败</p>
-            <details style="margin-top: 10px;">
-              <summary style="cursor: pointer; color: #409EFF;">查看详情</summary>
-              <div style="margin-top: 5px;">
-                <p style="color: #67C23A;">成功: ${successFiles.join(', ')}</p>
-                <p style="color: #F56C6C;">失败: ${errorFiles.map(f => `${f.file}(${f.error})`).join(', ')}</p>
-              </div>
-            </details>
-          </div>
-        `
-      })
-    } else {
-      const errorMessages = uploadResults.filter(r => !r.success).map(r => `${r.file}: ${r.error}`).join('\n')
-      ElMessage({
-        type: 'error',
-        duration: 8000,
-        message: `所有文件上传失败：\n${errorMessages}`
-      })
+        
+        console.log(`开始上传文件: ${fileItem.name}，大小: ${(fileItem.size/1024/1024).toFixed(2)}MB`)
+        await ragAPI.uploadDocument(formData)
+        
+        // 上传成功
+        fileItem.status = 'success'
+        uploadedCount.value++
+        console.log(`文件 ${fileItem.name} 上传成功`)
+      } catch (error) {
+        // 上传失败
+        fileItem.status = 'error'
+        
+        // 详细的错误处理
+        let errorMessage = '上传失败'
+        if (error.code === 'ECONNABORTED') {
+          errorMessage = '上传超时，文件可能过大或网络问题'
+        } else if (error.response?.data?.detail) {
+          errorMessage = error.response.data.detail
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+        
+        fileItem.errorMessage = errorMessage
+        console.error(`文件 ${fileItem.name} 上传失败:`, error)
+      }
     }
     
     // 刷新文档列表
-    if (successCount > 0) {
-      fetchDocuments()
+    await fetchDocuments()
+    
+    if (uploadedCount.value === totalCount.value) {
+      ElMessage.success(`所有文件上传成功！共上传 ${uploadedCount.value} 个文件`)
+      
+      // 延迟关闭对话框，让用户看到结果
+      setTimeout(() => {
+        showUploadDialog.value = false
+        fileList.value = []
+        selectedEmbeddingModelId.value = null
+      }, 2000)
+    } else if (uploadedCount.value > 0) {
+      ElMessage.warning(`部分文件上传成功：${uploadedCount.value} 个成功，${totalCount.value - uploadedCount.value} 个失败`)
+    } else {
+      ElMessage.error('所有文件上传失败')
     }
-    
-    // 延迟关闭对话框，让用户看到结果
-    setTimeout(() => {
-      showUploadDialog.value = false
-      fileList.value = []
-      selectedEmbeddingModelId.value = null
-    }, 2000)
-    
   } catch (error) {
-    console.error('批量上传失败:', error)
+    console.error('上传过程中发生错误:', error)
     ElMessage.error('上传过程中发生错误')
   } finally {
     isUploading.value = false
-    uploadedCount.value = 0
-    totalCount.value = 0
   }
 }
 
@@ -528,6 +569,14 @@ const submitUpdateFile = () => {
 // 自定义更新文件HTTP请求处理
 const handleUpdateFileHttpRequest = async (options) => {
   const file = options.file
+  
+  // 检查文件大小
+  const maxSizeMB = 10 // 最大文件大小限制，单位MB
+  if (file.size / 1024 / 1024 > maxSizeMB) {
+    options.onError(new Error(`文件大小超过${maxSizeMB}MB限制`))
+    return
+  }
+  
   const formData = new FormData()
   formData.append('file', file)
   
@@ -537,11 +586,24 @@ const handleUpdateFileHttpRequest = async (options) => {
   }
   
   try {
+    console.log(`开始更新文档文件: ${file.name}, 文档ID: ${currentDocument.value.id}, 大小: ${(file.size/1024/1024).toFixed(2)}MB`)
     // 使用ragAPI更新文档文件
     const response = await ragAPI.updateDocumentFile(currentDocument.value.id, formData)
     options.onSuccess(response)
   } catch (error) {
-    options.onError(error)
+    console.error('更新文件失败:', error)
+    
+    // 详细的错误处理
+    let errorMessage = '文件更新失败'
+    if (error.code === 'ECONNABORTED') {
+      errorMessage = '更新超时，文件可能过大或网络问题'
+    } else if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    options.onError(new Error(errorMessage))
   }
 }
 
@@ -646,6 +708,39 @@ const formatDate = (dateString) => {
     minute: '2-digit'
   }).format(date)
 }
+
+// 获取状态标签类型
+const getStatusType = (status) => {
+  switch (status) {
+    case 'processed':
+      return 'success'
+    case 'processing':
+      return 'warning'
+    case 'pending':
+      return 'info'
+    case 'failed':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 获取状态文本
+const getStatusText = (status) => {
+  switch (status) {
+    case 'processed':
+      return '已处理'
+    case 'processing':
+      return '处理中'
+    case 'pending':
+      return '待处理'
+    case 'failed':
+      return '处理失败'
+    default:
+      return '未知状态'
+  }
+}
+
 </script>
 
 <style scoped>

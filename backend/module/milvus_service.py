@@ -1,40 +1,68 @@
 import os
+from typing import List, Optional
 from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
-
-# 根据环境动态获取配置
-current_env = os.getenv('ENVIRONMENT', 'dev')
-env_config = __import__(f"config.{current_env}", fromlist=["*"])
-MILVUS_HOST = env_config.MILVUS_HOST
-MILVUS_PORT = env_config.MILVUS_PORT
-VECTOR_DIM = env_config.VECTOR_DIM
-MILVUS_USERNAME = env_config.MILVUS_USERNAME
-MILVUS_PASSWORD = env_config.MILVUS_PASSWORD
 
 # 导入日志配置
 from logger_config import get_logger
 logger = get_logger("milvus_service")
 
-# 连接Milvus
-def connect_to_milvus():
+# 根据环境动态获取配置
+current_env = os.getenv('ENVIRONMENT', 'dev')
+try:
+    env_config = __import__(f"config.{current_env}", fromlist=["*"])
+    MILVUS_HOST = env_config.MILVUS_HOST
+    MILVUS_PORT = env_config.MILVUS_PORT
+    VECTOR_DIM = env_config.VECTOR_DIM
+    MILVUS_USERNAME = getattr(env_config, 'MILVUS_USERNAME', None)
+    MILVUS_PASSWORD = getattr(env_config, 'MILVUS_PASSWORD', None)
+except Exception as e:
+    logger.error(f"加载配置失败: {e}，使用默认配置")
+    MILVUS_HOST = "localhost"
+    MILVUS_PORT = 19530
+    VECTOR_DIM = 1536
+    MILVUS_USERNAME = None
+    MILVUS_PASSWORD = None
+
+def connect_to_milvus(max_retries: int = 3) -> bool:
+    """
+    连接到Milvus服务器，带有重试机制
+    
+    Args:
+        max_retries (int): 最大重试次数
+    
+    Returns:
+        bool: 连接是否成功
+    """
     logger.info(f"尝试连接Milvus服务器: {MILVUS_HOST}:{MILVUS_PORT}")
-    try:
-        # 创建连接参数
-        conn_params = {
-            "host": MILVUS_HOST,
-            "port": MILVUS_PORT
-        }
-        
-        # 如果设置了用户名和密码，则添加认证
-        if MILVUS_USERNAME and MILVUS_PASSWORD:
-            conn_params["user"] = MILVUS_USERNAME
-            conn_params["password"] = MILVUS_PASSWORD
-            logger.debug("Milvus连接包含用户名和密码认证")
-        
-        connections.connect("default", **conn_params)
-        logger.info("Milvus服务器连接成功")
-    except Exception as e:
-        logger.error(f"Milvus服务器连接失败: {str(e)}")
-        raise
+    
+    for attempt in range(max_retries):
+        try:
+            # 创建连接参数
+            conn_params = {
+                "host": MILVUS_HOST,
+                "port": MILVUS_PORT
+            }
+            
+            # 如果设置了用户名和密码，则添加认证
+            if MILVUS_USERNAME and MILVUS_PASSWORD:
+                conn_params["user"] = MILVUS_USERNAME
+                conn_params["password"] = MILVUS_PASSWORD
+                logger.debug("Milvus连接包含用户名和密码认证")
+            
+            connections.connect("default", **conn_params)
+            logger.info("Milvus服务器连接成功")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Milvus连接尝试 {attempt + 1}/{max_retries} 失败: {str(e)}")
+            if attempt == max_retries - 1:
+                logger.error(f"Milvus服务器连接失败，所有重试都已用尽: {str(e)}")
+                raise
+            else:
+                import time
+                time.sleep(2 ** attempt)  # 指数退避
+    
+    return False
 
 # 创建用户集合
 def create_user_collection(user_id: int) -> str:
@@ -75,20 +103,29 @@ def create_user_collection(user_id: int) -> str:
         logger.error(f"创建集合 {collection_name} 失败: {str(e)}")
         raise
 
-<<<<<<< HEAD
+# 搜索相似向量
 # 获取或创建Milvus集合
 def get_milvus_collection(collection_name: str) -> Collection:
+    """
+    获取或创建Milvus集合
+    
+    Args:
+        collection_name (str): 集合名称
+    
+    Returns:
+        Collection: Milvus集合对象
+    """
     logger.info(f"获取Milvus集合: {collection_name}")
     
     try:
         if not utility.has_collection(collection_name):
-            # 如果集合不存在，创建一个新的
+            # 如果集合不存在，创建一个新的（与create_user_collection保持一致）
             logger.debug(f"集合 {collection_name} 不存在，创建新集合")
             fields = [
                 FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-                FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=100),
-                FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
+                FieldSchema(name="document_id", dtype=DataType.INT64),  # 修复：使用INT64类型保持一致
                 FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+                FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
             ]
             
             schema = CollectionSchema(fields, description=f"Collection for {collection_name}")
@@ -113,6 +150,15 @@ def get_milvus_collection(collection_name: str) -> Collection:
 
 # 删除Milvus集合
 def drop_collection(collection_name: str) -> bool:
+    """
+    删除Milvus集合
+    
+    Args:
+        collection_name (str): 集合名称
+    
+    Returns:
+        bool: 是否删除成功
+    """
     logger.info(f"删除Milvus集合: {collection_name}")
     
     try:
@@ -126,9 +172,8 @@ def drop_collection(collection_name: str) -> bool:
     except Exception as e:
         logger.error(f"删除集合 {collection_name} 失败: {str(e)}")
         raise
-=======
+
 # 搜索相似向量
->>>>>>> main
 def search_similar_vectors(collection_name: str, query_vector: list, limit: int = 5) -> list:
     logger.info(f"在Milvus集合 {collection_name} 中搜索相似向量，限制结果数: {limit}")
     

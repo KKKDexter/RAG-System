@@ -1,14 +1,11 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import localConfig from './config/local.js'
 import devConfig from './config/dev.js'
 import prodConfig from './config/prod.js'
 
 // 根据不同环境选择对应的配置
 const getConfigByMode = (mode) => {
   switch (mode) {
-    case 'localdev':
-      return localConfig
     case 'production':
       return prodConfig
     case 'development':

@@ -24,7 +24,31 @@ from module.minio_service import (
 
 # 导入日志配置
 from logger_config import get_logger
+from .exception_handler import handle_file_exceptions, handle_exceptions, raise_not_found
 logger = get_logger("storage_service")
+
+
+# 创建上传目录的便捷函数
+def create_upload_dir(folder_path: str = "documents") -> str:
+    """
+    创建上传目录的便捷函数
+    
+    Args:
+        folder_path: 文件夹路径
+        
+    Returns:
+        str: 本地目录路径
+    """
+    upload_dir = os.path.join(os.getcwd(), folder_path)
+    
+    # 只有在目录不存在时才创建
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir, exist_ok=True)
+        logger.info(f"本地上传目录创建成功: {upload_dir}")
+    else:
+        logger.debug(f"本地上传目录已存在: {upload_dir}")
+        
+    return upload_dir
 
 
 class StorageType(Enum):
@@ -161,6 +185,7 @@ class StorageService:
         
         return file_path
     
+    @handle_file_exceptions("创建上传目录")
     def _create_upload_dir(self, folder_path: str = "documents") -> str:
         """
         创建本地上传目录（只在需要本地存储时创建）
@@ -174,20 +199,16 @@ class StorageService:
         # 使用 documents 而不是 uploads 作为默认目录
         upload_dir = os.path.join(os.getcwd(), folder_path)
         
-        try:
-            # 只有在目录不存在时才创建
-            if not os.path.exists(upload_dir):
-                os.makedirs(upload_dir, exist_ok=True)
-                logger.info(f"本地上传目录创建成功: {upload_dir}")
-            else:
-                logger.debug(f"本地上传目录已存在: {upload_dir}")
-                
-        except Exception as e:
-            logger.error(f"本地上传目录创建失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"上传目录创建失败: {str(e)}")
+        # 只有在目录不存在时才创建
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir, exist_ok=True)
+            logger.info(f"本地上传目录创建成功: {upload_dir}")
+        else:
+            logger.debug(f"本地上传目录已存在: {upload_dir}")
             
         return upload_dir
     
+    @handle_file_exceptions("获取文件内容")
     def get_file_content(self, file_path: str = None, minio_path: str = None) -> BinaryIO:
         """
         获取文件内容
@@ -199,22 +220,17 @@ class StorageService:
         Returns:
             BinaryIO: 文件内容流
         """
-        try:
-            # 优先从本地获取
-            if file_path and os.path.exists(file_path):
-                logger.info(f"从本地获取文件: {file_path}")
-                return open(file_path, 'rb')
-            
-            # 从MinIO获取
-            if minio_path and is_minio_available():
-                logger.info(f"从MinIO获取文件: {minio_path}")
-                return download_file_from_minio(minio_path)
-            
-            raise HTTPException(status_code=404, detail="文件不存在")
-            
-        except Exception as e:
-            logger.error(f"获取文件内容失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"获取文件内容失败: {str(e)}")
+        # 优先从本地获取
+        if file_path and os.path.exists(file_path):
+            logger.info(f"从本地获取文件: {file_path}")
+            return open(file_path, 'rb')
+        
+        # 从MinIO获取
+        if minio_path and is_minio_available():
+            logger.info(f"从MinIO获取文件: {minio_path}")
+            return download_file_from_minio(minio_path)
+        
+        raise_not_found("文件")
     
     def delete_file(self, file_path: str = None, minio_path: str = None) -> dict:
         """

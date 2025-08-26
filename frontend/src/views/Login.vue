@@ -57,8 +57,10 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElForm } from 'element-plus'
+import { ElForm } from 'element-plus'
 import { authAPI } from '../utils/api'
+import { loginFormRules } from '../utils/validation'
+import { handleApiError, showSuccess, validateForm } from '../utils/errorHandler'
 
 const router = useRouter()
 const loginFormRef = ref()
@@ -71,28 +73,19 @@ const loginForm = reactive({
   password: ''
 })
 
-// 表单验证规则
-const loginRules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' }
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
-  ]
-}
+// 使用通用验证规则
+const loginRules = loginFormRules
 
 // 处理登录
 const handleLogin = async () => {
   // 验证表单
-  if (!loginFormRef.value) return
+  const isValid = await validateForm(loginFormRef.value, '登录')
+  if (!isValid) return
+  
+  isLoading.value = true
   
   try {
-    await loginFormRef.value.validate()
-    isLoading.value = true
-    
-    // 发送登录请求使用authAPI
+    // 发送登录请求
     const response = await authAPI.login(loginForm)
     
     // 保存token和token_type
@@ -110,11 +103,11 @@ const handleLogin = async () => {
       localStorage.removeItem('rememberedUsername')
     }
     
-    ElMessage.success('登录成功')
+    showSuccess('登录成功')
     router.push({ name: 'Dashboard' })
+    
   } catch (error) {
-    console.error('登录失败:', error)
-    // 错误处理已在api.ts中完成
+    handleApiError(error, '登录失败')
   } finally {
     isLoading.value = false
   }

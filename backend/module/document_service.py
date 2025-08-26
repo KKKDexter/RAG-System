@@ -24,7 +24,7 @@ from logger_config import get_logger
 logger = get_logger("document_service")
 
 # 处理文档
-def process_document(file_path: str = None, minio_path: str = None, file_extension: str = None) -> Tuple[List, OpenAIEmbeddings]:
+def process_document(file_path: str = None, minio_path: str = None, file_extension: str = None, embedding_model_name: str = None) -> Tuple[List, OpenAIEmbeddings]:
     """
     处理文档，支持从本地或MinIO读取文件
     
@@ -32,6 +32,7 @@ def process_document(file_path: str = None, minio_path: str = None, file_extensi
         file_path: 本地文件路径
         minio_path: MinIO文件路径
         file_extension: 文件扩展名
+        embedding_model_name: 指定的embedding模型名称
     
     Returns:
         Tuple[List, OpenAIEmbeddings]: 文本块列表和嵌入模型
@@ -119,21 +120,50 @@ def process_document(file_path: str = None, minio_path: str = None, file_extensi
         raise HTTPException(status_code=500, detail=f"文本分割失败: {str(e)}")
     
     # 生成向量 (使用配置的嵌入模型参数)
-    logger.debug(f"创建嵌入模型: {EMBEDDING_MODEL_NAME}")
+    model_name = embedding_model_name or EMBEDDING_MODEL_NAME
+    logger.debug(f"创建嵌入模型: {model_name}")
     try:
+        # 先尝试从数据库获取模型配置
+        api_key = EMBEDDING_MODEL_API_KEY
+        model_url = None
+        
+        # 尝试从数据库获取模型
+        try:
+            from sqlalchemy.orm import Session
+            from .database import get_db
+            from .models import LLMModel
+            from .base_service import llm_model_service
+            
+            # 创建临时数据库会话
+            db = next(get_db())
+            
+            # 根据模型名称查询
+            if model_name:
+                db_model = llm_model_service.get_by_name(db, model_name)
+                if db_model and db_model.type == "embedding" and db_model.is_active:
+                    logger.info(f"从数据库获取到模型配置: {model_name}")
+                    api_key = db_model.api_key
+                    model_url = db_model.base_url
+        except Exception as db_error:
+            logger.warning(f"从数据库获取模型配置失败: {str(db_error)}")
+        
         # 创建嵌入模型配置参数
         embedding_params = {}
         
         # 如果设置了API Key，则添加
-        if EMBEDDING_MODEL_API_KEY:
-            embedding_params["openai_api_key"] = EMBEDDING_MODEL_API_KEY
+        if api_key:
+            embedding_params["openai_api_key"] = api_key
         
         # 如果设置了模型名称，则添加
-        if EMBEDDING_MODEL_NAME:
-            embedding_params["model"] = EMBEDDING_MODEL_NAME
+        if model_name:
+            embedding_params["model"] = model_name
+            
+        # 如果设置了基础URL，则添加
+        if model_url:
+            embedding_params["openai_api_base"] = model_url
         
         embeddings = OpenAIEmbeddings(**embedding_params)
-        logger.info(f"嵌入模型创建成功: {EMBEDDING_MODEL_NAME}")
+        logger.info(f"嵌入模型创建成功: {model_name}")
     except Exception as e:
         logger.error(f"嵌入模型创建失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"嵌入模型初始化失败: {str(e)}")

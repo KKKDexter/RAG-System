@@ -16,6 +16,7 @@ else:
 
 # 导入日志配置
 from logger_config import get_logger
+from .exception_handler import handle_api_exceptions, handle_file_exceptions, raise_not_found
 logger = get_logger("minio_service")
 
 
@@ -63,6 +64,7 @@ class MinIOService:
         """检查MinIO服务是否可用"""
         return self.client is not None
     
+    @handle_api_exceptions("MinIO文件上传")
     async def upload_file(self, file, folder_path: str = "documents") -> Tuple[str, str]:
         """
         上传文件到MinIO
@@ -77,43 +79,36 @@ class MinIOService:
         if not self.is_available():
             raise HTTPException(status_code=500, detail="MinIO服务不可用")
         
-        try:
-            # 获取文件信息
-            original_filename = file.filename
-            file_extension = os.path.splitext(original_filename)[1].lower()
-            unique_filename = f"{uuid.uuid4()}{file_extension}"
-            object_name = f"{folder_path}/{unique_filename}"
-            
-            logger.info(f"开始上传文件到MinIO: {original_filename} -> {object_name}")
-            
-            # 读取文件内容
-            if hasattr(file, 'read'):
-                if asyncio.iscoroutinefunction(file.read):
-                    content = await file.read()
-                else:
-                    content = file.read()
+        # 获取文件信息
+        original_filename = file.filename
+        file_extension = os.path.splitext(original_filename)[1].lower()
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        object_name = f"{folder_path}/{unique_filename}"
+        
+        logger.info(f"开始上传文件到MinIO: {original_filename} -> {object_name}")
+        
+        # 读取文件内容
+        if hasattr(file, 'read'):
+            if asyncio.iscoroutinefunction(file.read):
+                content = await file.read()
             else:
-                raise ValueError("不支持的文件对象类型")
-            
-            # 上传到MinIO
-            self.client.put_object(
-                MINIO_BUCKET_NAME,
-                object_name,
-                BytesIO(content),
-                length=len(content),
-                content_type=self._get_content_type(file_extension)
-            )
-            
-            logger.info(f"文件上传到MinIO成功: {object_name}，大小: {len(content)} 字节")
-            return object_name, file_extension
-            
-        except S3Error as e:
-            logger.error(f"MinIO文件上传失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"MinIO文件上传失败: {str(e)}")
-        except Exception as e:
-            logger.error(f"文件上传处理失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"文件上传处理失败: {str(e)}")
+                content = file.read()
+        else:
+            raise ValueError("不支持的文件对象类型")
+        
+        # 上传到MinIO
+        self.client.put_object(
+            MINIO_BUCKET_NAME,
+            object_name,
+            BytesIO(content),
+            length=len(content),
+            content_type=self._get_content_type(file_extension)
+        )
+        
+        logger.info(f"文件上传到MinIO成功: {object_name}，大小: {len(content)} 字节")
+        return object_name, file_extension
     
+    @handle_file_exceptions("MinIO文件下载")
     def download_file(self, object_name: str) -> BinaryIO:
         """
         从MinIO下载文件
@@ -127,17 +122,14 @@ class MinIOService:
         if not self.is_available():
             raise HTTPException(status_code=500, detail="MinIO服务不可用")
         
+        logger.info(f"从MinIO下载文件: {object_name}")
         try:
-            logger.info(f"从MinIO下载文件: {object_name}")
             response = self.client.get_object(MINIO_BUCKET_NAME, object_name)
             return response
-        except S3Error as e:
-            logger.error(f"MinIO文件下载失败: {str(e)}")
-            raise HTTPException(status_code=404, detail=f"文件不存在: {object_name}")
-        except Exception as e:
-            logger.error(f"文件下载处理失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"文件下载处理失败: {str(e)}")
+        except S3Error:
+            raise_not_found("文件", object_name)
     
+    @handle_file_exceptions("MinIO文件删除")
     def delete_file(self, object_name: str) -> bool:
         """
         从MinIO删除文件
@@ -151,17 +143,10 @@ class MinIOService:
         if not self.is_available():
             raise HTTPException(status_code=500, detail="MinIO服务不可用")
         
-        try:
-            logger.info(f"从MinIO删除文件: {object_name}")
-            self.client.remove_object(MINIO_BUCKET_NAME, object_name)
-            logger.info(f"MinIO文件删除成功: {object_name}")
-            return True
-        except S3Error as e:
-            logger.error(f"MinIO文件删除失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"MinIO文件删除失败: {str(e)}")
-        except Exception as e:
-            logger.error(f"文件删除处理失败: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"文件删除处理失败: {str(e)}")
+        logger.info(f"从MinIO删除文件: {object_name}")
+        self.client.remove_object(MINIO_BUCKET_NAME, object_name)
+        logger.info(f"MinIO文件删除成功: {object_name}")
+        return True
     
     def file_exists(self, object_name: str) -> bool:
         """

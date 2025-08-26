@@ -1,18 +1,15 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 from module.database import get_db
 from module.models import User
 from module.schemas import UserOut, UserCreate, UserUpdate
-from module.auth import get_current_active_user, is_admin
+from module.auth_service import get_current_active_user, is_admin, get_password_hash
+from module.exception_handler import create_resource, update_resource, delete_resource, get_resource, raise_not_found, raise_conflict
 
 # 导入日志配置
 from logger_config import get_logger
 logger = get_logger("users_router")
-
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # 创建路由
 router = APIRouter(
@@ -35,26 +32,26 @@ admin_router = APIRouter(
 
 # 获取所有用户（管理员权限）
 @admin_router.get("/users", response_model=List[UserOut])
+@get_resource("用户列表")
 def get_all_users(
     include_deleted: bool = Query(False, description="是否包含已删除用户"),
     current_user: User = Depends(is_admin),
     db: Session = Depends(get_db)
 ):
     logger.info(f"管理员 {current_user.id} 请求获取所有用户列表")
-    try:
-        query = db.query(User)
-        if not include_deleted:
-            query = query.filter(User.is_delete == False)
-        users = query.all()
-        logger.info(f"管理员 {current_user.id} 成功获取所有用户列表，共 {len(users)} 个用户")
-        logger.debug(f"用户列表: {[user.username for user in users]}")
-        return users
-    except Exception as e:
-        logger.error(f"管理员获取所有用户列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取用户列表失败: {str(e)}")
+    
+    query = db.query(User)
+    if not include_deleted:
+        query = query.filter(User.is_delete == False)
+    users = query.all()
+    
+    logger.info(f"管理员 {current_user.id} 成功获取所有用户列表，共 {len(users)} 个用户")
+    logger.debug(f"用户列表: {[user.username for user in users]}")
+    return users
 
 # 创建用户（管理员权限）
 @admin_router.post("/users", response_model=UserOut)
+@create_resource("用户")
 def create_user(
     user_data: UserCreate,
     current_user: User = Depends(is_admin),
@@ -66,39 +63,35 @@ def create_user(
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
         logger.warning(f"用户名 {user_data.username} 已存在")
-        raise HTTPException(status_code=400, detail="用户名已存在")
+        raise_conflict("用户名")
     
     # 检查邮箱是否已存在
     existing_email = db.query(User).filter(User.email == user_data.email).first()
     if existing_email:
         logger.warning(f"邮箱 {user_data.email} 已存在")
-        raise HTTPException(status_code=400, detail="邮箱已存在")
+        raise_conflict("邮箱")
     
-    try:
-        # 加密密码
-        hashed_password = pwd_context.hash(user_data.password)
-        
-        # 创建用户
-        db_user = User(
-            username=user_data.username,
-            email=user_data.email,
-            hashed_password=hashed_password,
-            phone=user_data.phone,
-            role=user_data.role
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        
-        logger.info(f"管理员 {current_user.id} 成功创建用户: {db_user.username}, ID: {db_user.id}")
-        return db_user
-    except Exception as e:
-        logger.error(f"创建用户失败: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"创建用户失败: {str(e)}")
+    # 使用统一的密码加密函数
+    hashed_password = get_password_hash(user_data.password)
+    
+    # 创建用户
+    db_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hashed_password,
+        phone=user_data.phone,
+        role=user_data.role
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    logger.info(f"管理员 {current_user.id} 成功创建用户: {db_user.username}, ID: {db_user.id}")
+    return db_user
 
 # 获取单个用户（管理员权限）
 @admin_router.get("/users/{user_id}", response_model=UserOut)
+@get_resource("用户")
 def get_user(
     user_id: int,
     current_user: User = Depends(is_admin),
@@ -109,13 +102,14 @@ def get_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         logger.warning(f"用户 {user_id} 不存在")
-        raise HTTPException(status_code=404, detail="用户不存在")
+        raise_not_found("用户", user_id)
     
     logger.info(f"管理员 {current_user.id} 成功获取用户 {user_id} 的信息")
     return user
 
 # 更新用户（管理员权限）
 @admin_router.put("/users/{user_id}", response_model=UserOut)
+@update_resource("用户")
 def update_user(
     user_id: int,
     user_data: UserUpdate,
@@ -127,43 +121,36 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         logger.warning(f"用户 {user_id} 不存在")
-        raise HTTPException(status_code=404, detail="用户不存在")
+        raise_not_found("用户", user_id)
     
-    try:
-        # 更新字段
-        update_data = user_data.model_dump(exclude_unset=True)
-        
-        # 如果更新密码，需要加密
-        if "password" in update_data:
-            update_data["hashed_password"] = pwd_context.hash(update_data.pop("password"))
-        
-        # 检查用户名是否重复
-        if "username" in update_data and update_data["username"] != user.username:
-            existing_user = db.query(User).filter(User.username == update_data["username"]).first()
-            if existing_user:
-                raise HTTPException(status_code=400, detail="用户名已存在")
-        
-        # 检查邮箱是否重复
-        if "email" in update_data and update_data["email"] != user.email:
-            existing_email = db.query(User).filter(User.email == update_data["email"]).first()
-            if existing_email:
-                raise HTTPException(status_code=400, detail="邮箱已存在")
-        
-        # 应用更新
-        for field, value in update_data.items():
-            setattr(user, field, value)
-        
-        db.commit()
-        db.refresh(user)
-        
-        logger.info(f"管理员 {current_user.id} 成功更新用户 {user_id} 的信息")
-        return user
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"更新用户失败: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"更新用户失败: {str(e)}")
+    # 更新字段
+    update_data = user_data.model_dump(exclude_unset=True)
+    
+    # 如果更新密码，需要加密
+    if "password" in update_data:
+        update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+    
+    # 检查用户名是否重复
+    if "username" in update_data and update_data["username"] != user.username:
+        existing_user = db.query(User).filter(User.username == update_data["username"]).first()
+        if existing_user:
+            raise_conflict("用户名")
+    
+    # 检查邮箱是否重复
+    if "email" in update_data and update_data["email"] != user.email:
+        existing_email = db.query(User).filter(User.email == update_data["email"]).first()
+        if existing_email:
+            raise_conflict("邮箱")
+    
+    # 应用更新
+    for field, value in update_data.items():
+        setattr(user, field, value)
+    
+    db.commit()
+    db.refresh(user)
+    
+    logger.info(f"管理员 {current_user.id} 成功更新用户 {user_id} 的信息")
+    return user
 
 # 逻辑删除用户（管理员权限）
 @admin_router.delete("/users/{user_id}")

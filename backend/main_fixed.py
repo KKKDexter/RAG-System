@@ -5,6 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# ✅ 修复 functools.iscoroutinefunction 兼容性问题
+import inspect, functools
+if not hasattr(functools, "iscoroutinefunction"):
+    functools.iscoroutinefunction = inspect.iscoroutinefunction
+
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -31,29 +36,64 @@ args = parser.parse_args()
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入配置和路由 - 在加载.env文件后进行
+auth_router = None
+rag_router = None
+users_router = None
+admin_router = None
+llm_router = None
+config_router = None
+MILVUS_HOST = None
+MILVUS_PORT = None
+logger = None
+create_upload_dir = None
+
+# 先导入基础模块（避免在lifespan中出现未定义错误）
 try:
-    from config.dev import (MILVUS_HOST, MILVUS_PORT,
-                            SECRET_KEY, ALGORITHM)
-    print(f"从config.dev导入的SECRET_KEY: {SECRET_KEY}")
-    print(f"从config.dev导入的MILVUS_HOST: {MILVUS_HOST}")
-    
-    from api.auth import router as auth_router
-    from api.rag import router as rag_router
-    from api.users import router as users_router
-    from api.llm import router as llm_router
-    
-    # 导入数据库和Milvus相关模块
     from module.database import Base, engine
     from module.milvus_service import connect_to_milvus
-    from module.document_service import create_upload_dir
+    from module.storage_service import create_upload_dir
+    print("[DEBUG] 基础模块导入成功")
+except Exception as e:
+    print(f"[ERROR] 基础模块导入失败: {str(e)}")
+    Base = None
+    engine = None
+    connect_to_milvus = None
+    create_upload_dir = None
+
+try:
+    # 根据环境参数动态导入配置
+    if args.env == 'prod':
+        from config.prod import MILVUS_HOST, MILVUS_PORT
+        print(f"使用生产环境配置: MILVUS_HOST={MILVUS_HOST}")
+    else:
+        from config.dev import MILVUS_HOST, MILVUS_PORT
+        print(f"使用开发环境配置: MILVUS_HOST={MILVUS_HOST}")
+    
+    print("[INFO] 安全配置（SECRET_KEY、ALGORITHM）已从数据库动态加载")
+    
+    from api.auth import router as auth_router
+    print("[DEBUG] 成功导入 auth_router")
+    from api.rag import router as rag_router
+    print("[DEBUG] 成功导入 rag_router")
+    from api.users import router as users_router, admin_router
+    print("[DEBUG] 成功导入 users_router 和 admin_router")
+    from api.llm import router as llm_router
+    print("[DEBUG] 成功导入 llm_router")
+    from api.config import router as config_router
+    print("[DEBUG] 成功导入 config_router")
     
     # 导入日志配置
     from logger_config import get_logger
     logger = get_logger("main")
+    
+    print("[SUCCESS] 所有模块导入成功")
 except Exception as e:
     print(f"导入模块时出错: {str(e)}")
-    # 在实际部署中，可以选择退出或使用默认配置
-    # 这里我们继续，但在实际运行中可能会有其他错误
+    print("[WARNING] 部分模块导入失败，服务可能无法正常运行")
+    # 设置默认值以避免后续错误
+    if MILVUS_HOST is None:
+        MILVUS_HOST = "localhost"
+        MILVUS_PORT = "19530"
 
 # 使用lifespan事件处理器替代on_event
 @asynccontextmanager
@@ -62,21 +102,40 @@ async def lifespan(app: FastAPI):
     
     # 创建数据库表
     try:
-        Base.metadata.create_all(bind=engine)
-        print("数据库表创建成功")
+        if Base is not None and engine is not None:
+            Base.metadata.create_all(bind=engine)
+            print("数据库表创建成功")
+        else:
+            print("数据库模块未成功导入，跳过表创建")
     except Exception as e:
         print(f"创建数据库表失败: {str(e)}")
     
+    # 加载动态配置（从数据库加载安全令牌配置）
+    try:
+        from module.config_manager import update_runtime_config
+        if update_runtime_config():
+            print("动态配置加载成功")
+        else:
+            print("动态配置加载失败，使用默认配置")
+    except Exception as e:
+        print(f"加载动态配置时出错: {str(e)}")
+    
     # 连接Milvus
     try:
-        connect_to_milvus()
-        print(f"Milvus连接成功: {MILVUS_HOST}:{MILVUS_PORT}")
+        if connect_to_milvus is not None and MILVUS_HOST is not None:
+            connect_to_milvus()
+            print(f"Milvus连接成功: {MILVUS_HOST}:{MILVUS_PORT}")
+        else:
+            print("Milvus模块未成功导入，跳过连接")
     except Exception as e:
         print(f"Milvus连接失败: {str(e)}")
     
     # 创建上传目录
     try:
-        create_upload_dir()
+        if create_upload_dir is not None:
+            create_upload_dir()
+        else:
+            print("文档服务模块未成功导入，跳过上传目录创建")
     except Exception as e:
         print(f"创建上传目录失败: {str(e)}")
     
@@ -101,11 +160,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
-app.include_router(auth_router)
-app.include_router(rag_router)
-app.include_router(users_router)
-app.include_router(llm_router)
+# 注册路由（只有在成功导入的情况下才注册）
+if auth_router:
+    app.include_router(auth_router)
+    print("[DEBUG] 已注册 auth_router: /v1/auth/*")
+if rag_router:
+    app.include_router(rag_router)
+    print("[DEBUG] 已注册 rag_router: /v1/rag/*")
+if users_router:
+    app.include_router(users_router)
+    print("[DEBUG] 已注册 users_router: /v1/users/*")
+if admin_router:
+    app.include_router(admin_router)
+    print("[DEBUG] 已注册 admin_router: /v1/admin/*")
+if llm_router:
+    app.include_router(llm_router)
+    print("[DEBUG] 已注册 llm_router: /llm/*")
+if config_router:
+    app.include_router(config_router)
+    print("[DEBUG] 已注册 config_router: /v1/config/*")
+
+print(f"[INFO] 路由注册完成，应用包含 {len(app.routes)} 个路由")
 
 if __name__ == "__main__":
     import uvicorn

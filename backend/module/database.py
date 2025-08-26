@@ -5,8 +5,15 @@ import os
 
 # 根据环境获取配置
 current_env = os.getenv('ENVIRONMENT', 'dev')
-env_config = __import__(f"config.{current_env}", fromlist=["*"])
-DATABASE_URL = env_config.DATABASE_URL
+try:
+    if current_env == 'prod':
+        from config.prod import DATABASE_URL
+    else:
+        from config.dev import DATABASE_URL
+except ImportError as e:
+    logger.error(f"导入环境配置失败: {e}")
+    # 使用默认配置
+    DATABASE_URL = "mysql+pymysql://root:password@localhost:3306/rag_system"
 
 # 导入日志配置
 from logger_config import get_logger

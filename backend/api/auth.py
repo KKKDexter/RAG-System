@@ -5,13 +5,13 @@ from sqlalchemy.orm import Session
 from module.database import get_db
 from module.models import User
 from module.schemas import UserOut, UserCreate, Token, LoginRequest
-from module.auth import (
+from module.auth_service import (
     authenticate_user,
     create_access_token,
     get_password_hash,
     get_user
 )
-from config.dev import ACCESS_TOKEN_EXPIRE_MINUTES
+from module.config_manager import get_config
 from module.milvus_service import create_user_collection
 
 # 导入日志配置
@@ -71,28 +71,30 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     logger.info(f"收到用户登录请求，用户名: {login_data.username}")
     
-    try:
-        user = authenticate_user(db, login_data.username, login_data.password)
-        if not user:
-            logger.warning(f"用户登录失败：用户名 '{login_data.username}' 验证失败")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        logger.debug(f"用户 {login_data.username} 验证成功，生成访问令牌")
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user.username},
-            expires_delta=access_token_expires,
+    user = authenticate_user(db, login_data.username, login_data.password)
+    if not user:
+        logger.warning(f"用户登录失败：用户名 '{login_data.username}' 验证失败")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        
-        logger.info(f"用户登录成功：{login_data.username}，用户ID: {user.id}")
-        return {"access_token": access_token, "token_type": "bearer"}
-    except HTTPException:
-        # 已经在authenticate_user中处理了登录失败的日志
-        raise
-    except Exception as e:
-        logger.error(f"用户登录过程中发生错误: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"登录失败：{str(e)}")
+    
+    logger.debug(f"用户 {login_data.username} 验证成功，生成访问令牌")
+    # 从数据库获取token过期时间配置，确保类型为整数
+    from module.config_manager import config_manager
+    access_token_expire_minutes = config_manager.get_config('ACCESS_TOKEN_EXPIRE_MINUTES', 30, db)
+    if isinstance(access_token_expire_minutes, str):
+        try:
+            access_token_expire_minutes = int(access_token_expire_minutes)
+        except (ValueError, TypeError):
+            logger.warning(f"ACCESS_TOKEN_EXPIRE_MINUTES 配置值无效: {access_token_expire_minutes}，使用默认值 30")
+            access_token_expire_minutes = 30
+    access_token_expires = timedelta(minutes=access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username},
+        expires_delta=access_token_expires,
+    )
+    
+    logger.info(f"用户登录成功：{login_data.username}，用户ID: {user.id}")
+    return {"access_token": access_token, "token_type": "bearer"}

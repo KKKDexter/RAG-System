@@ -1,4 +1,15 @@
+"""
+大语言模型服务模块
+
+本模块提供大语言模型配置的业务逻辑处理
+
+作者: RAG-System Team
+版本: 2.0
+"""
+
 from sqlalchemy.orm import Session
+from typing import List, Optional
+from .base_service import llm_model_service
 from .models import LLMModel
 from .schemas import LLMModelCreate, LLMModelUpdate
 from logger_config import get_logger
@@ -6,72 +17,90 @@ from logger_config import get_logger
 logger = get_logger("llm_service")
 
 class LLMService:
+    """
+    大语言模型服务类
+    
+    使用基类提供的通用CRUD操作，减少重复代码
+    """
+    
     @staticmethod
-    def create_llm_model(db: Session, llm_model: LLMModelCreate):
+    def create_llm_model(db: Session, llm_model: LLMModelCreate) -> LLMModel:
         """创建新的大模型配置"""
-        logger.info(f"创建大模型配置: {llm_model.name}")
-        db_llm_model = LLMModel(
-            name=llm_model.name,
-            type=llm_model.type,
-            api_key=llm_model.api_key,
-            base_url=llm_model.base_url,
-            model_params=str(llm_model.model_params) if llm_model.model_params else None,
-            is_active=llm_model.is_active
+        # 检查名称是否已存在
+        if llm_model_service.get_by_name(db, llm_model.name):
+            raise ValueError(f"模型名称 '{llm_model.name}' 已存在")
+        
+        # 处理模型参数
+        model_params_str = None
+        if llm_model.model_params:
+            model_params_str = str(llm_model.model_params)
+        
+        return llm_model_service.create(
+            db, 
+            obj_in=llm_model,
+            model_params=model_params_str
         )
-        db.add(db_llm_model)
-        db.commit()
-        db.refresh(db_llm_model)
-        logger.info(f"大模型配置创建成功: {db_llm_model.id}")
-        return db_llm_model
-
+    
     @staticmethod
-    def get_llm_models(db: Session, skip: int = 0, limit: int = 100, is_delete: bool = False):
+    def get_llm_models(
+        db: Session, 
+        skip: int = 0, 
+        limit: int = 100, 
+        is_delete: bool = False
+    ) -> List[LLMModel]:
         """获取大模型配置列表"""
-        logger.info(f"获取大模型配置列表，跳过: {skip}，限制: {limit}，已删除: {is_delete}")
-        return db.query(LLMModel).filter(LLMModel.is_delete == is_delete).offset(skip).limit(limit).all()
-
+        return llm_model_service.get_multi(
+            db, 
+            skip=skip, 
+            limit=limit, 
+            include_deleted=is_delete
+        )
+    
     @staticmethod
-    def get_llm_model(db: Session, llm_model_id: int):
+    def get_llm_model(db: Session, llm_model_id: int) -> Optional[LLMModel]:
         """根据ID获取大模型配置"""
-        logger.info(f"获取大模型配置ID: {llm_model_id}")
-        return db.query(LLMModel).filter(LLMModel.id == llm_model_id, LLMModel.is_delete == False).first()
-
+        return llm_model_service.get(db, llm_model_id)
+    
     @staticmethod
-    def update_llm_model(db: Session, llm_model_id: int, llm_model: LLMModelUpdate):
+    def update_llm_model(
+        db: Session, 
+        llm_model_id: int, 
+        llm_model: LLMModelUpdate
+    ) -> Optional[LLMModel]:
         """更新大模型配置"""
-        logger.info(f"更新大模型配置ID: {llm_model_id}")
-        db_llm_model = db.query(LLMModel).filter(LLMModel.id == llm_model_id, LLMModel.is_delete == False).first()
-        if db_llm_model:
-            if llm_model.name is not None:
-                db_llm_model.name = llm_model.name
-            if llm_model.type is not None:
-                db_llm_model.type = llm_model.type
-            if llm_model.api_key is not None:
-                db_llm_model.api_key = llm_model.api_key
-            if llm_model.base_url is not None:
-                db_llm_model.base_url = llm_model.base_url
-            if llm_model.model_params is not None:
-                db_llm_model.model_params = str(llm_model.model_params)
-            if llm_model.is_active is not None:
-                db_llm_model.is_active = llm_model.is_active
-            db.commit()
-            db.refresh(db_llm_model)
-            logger.info(f"大模型配置更新成功: {llm_model_id}")
-        return db_llm_model
-
+        db_model = llm_model_service.get(db, llm_model_id)
+        if not db_model:
+            return None
+        
+        # 检查名称冲突
+        if llm_model.name and llm_model.name != db_model.name:
+            existing = llm_model_service.get_by_name(db, llm_model.name)
+            if existing and existing.id != llm_model_id:
+                raise ValueError(f"模型名称 '{llm_model.name}' 已存在")
+        
+        # 处理模型参数
+        update_data = {}
+        if llm_model.model_params is not None:
+            update_data['model_params'] = str(llm_model.model_params)
+        
+        return llm_model_service.update(
+            db,
+            db_obj=db_model,
+            obj_in=llm_model,
+            **update_data
+        )
+    
     @staticmethod
-    def delete_llm_model(db: Session, llm_model_id: int):
+    def delete_llm_model(db: Session, llm_model_id: int) -> Optional[LLMModel]:
         """删除大模型配置（软删除）"""
-        logger.info(f"删除大模型配置ID: {llm_model_id}")
-        db_llm_model = db.query(LLMModel).filter(LLMModel.id == llm_model_id, LLMModel.is_delete == False).first()
-        if db_llm_model:
-            db_llm_model.is_delete = True
-            db.commit()
-            logger.info(f"大模型配置删除成功: {llm_model_id}")
-        return db_llm_model
-
+        return llm_model_service.delete(db, id=llm_model_id, soft_delete=True)
+    
     @staticmethod
-    def get_llm_models_by_type(db: Session, model_type: str):
+    def get_llm_models_by_type(db: Session, model_type: str) -> List[LLMModel]:
         """根据类型获取大模型配置"""
-        logger.info(f"获取大模型配置类型: {model_type}")
-        return db.query(LLMModel).filter(LLMModel.type == model_type, LLMModel.is_delete == False, LLMModel.is_active == True).all()
+        return llm_model_service.get_by_type(db, model_type)
+    
+    @staticmethod
+    def get_llm_model_by_name(db: Session, model_name: str) -> Optional[LLMModel]:
+        """根据名称获取大模型配置"""
+        return llm_model_service.get_by_name(db, model_name)

@@ -5,9 +5,18 @@ import router from '../router'
 // 创建axios实例
 const api = axios.create({
   baseURL: '/api',
-  timeout: 60000,
+  timeout: 60000, // 普通请求超时时间60秒
   headers: {
     'Content-Type': 'application/json'
+  }
+})
+
+// 创建一个专用于文件上传的axios实例，有更长的超时时间
+const uploadApi = axios.create({
+  baseURL: '/api',
+  timeout: 300000, // 文件上传请求超时时间5分钟
+  headers: {
+    'Content-Type': 'multipart/form-data'
   }
 })
 
@@ -22,6 +31,70 @@ api.interceptors.request.use(
     return config
   },
   (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 为上传API添加请求拦截器
+uploadApi.interceptors.request.use(
+  (config) => {
+    // 从localStorage获取token
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 为上传API添加响应拦截器
+uploadApi.interceptors.response.use(
+  (response) => {
+    // 对响应数据做处理
+    return response.data
+  },
+  (error) => {
+    // 处理响应错误
+    if (error.response) {
+      // 服务器返回错误状态码
+      switch (error.response.status) {
+        case 401:
+          // 未授权，跳转到登录页
+          ElMessageBox.alert('登录已过期，请重新登录', '提示', {
+            confirmButtonText: '确定',
+            callback: () => {
+              localStorage.removeItem('token')
+              localStorage.removeItem('userInfo')
+              router.replace('/login')
+            }
+          })
+          break
+        case 403:
+          // 权限不足
+          ElMessage.error('权限不足，无法执行此操作')
+          break
+        case 404:
+          // 请求的资源不存在
+          ElMessage.error('请求的资源不存在')
+          break
+        case 500:
+          // 服务器内部错误
+          ElMessage.error('服务器内部错误，请稍后重试')
+          break
+        default:
+          // 其他错误
+          ElMessage.error(`请求失败: ${error.response.data.detail || error.response.statusText}`)
+      }
+    } else if (error.request) {
+      // 请求已发送但没有收到响应
+      ElMessage.error('文件上传超时，请检查网络设置或尝试上传较小的文件')
+    } else {
+      // 请求配置出错
+      ElMessage.error(`上传请求配置错误: ${error.message}`)
+    }
     return Promise.reject(error)
   }
 )
@@ -102,11 +175,7 @@ export const authAPI = {
 export const ragAPI = {
   // 上传文档
   uploadDocument(formData) {
-    return api.post('/v1/rag/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    return uploadApi.post('/v1/rag/upload', formData)
   },
   
   // 获取可用的embedding模型列表
@@ -131,11 +200,7 @@ export const ragAPI = {
   
   // 更新文档文件
   updateDocumentFile(id, formData) {
-    return api.put(`/v1/rag/documents/${id}/file`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    return uploadApi.put(`/v1/rag/documents/${id}/file`, formData)
   },
   
   // 删除文档

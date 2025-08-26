@@ -4,10 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "local": "vite --mode localdev",
     "dev": "vite --mode development",
     "build": "vite build --mode development",
-    "build:local": "vite build --mode localdev",
     "build:prod": "vite build --mode production",
     "build:prossl": "vite build --mode production",
     "preview": "vite preview"
