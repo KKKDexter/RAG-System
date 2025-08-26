@@ -3,7 +3,6 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
 from enum import Enum as PyEnum
-from datetime import datetime
 
 # 用户角色枚举
 class Role(PyEnum):
@@ -35,16 +34,12 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True)
     email = Column(String(100), unique=True, index=True)
-    hashed_password = Column(String(100))
+    hashed_password = Column(String(255))
     phone = Column(String(20))
     role = Column(Enum(Role), default=Role.user)
-<<<<<<< HEAD
     is_delete = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-=======
-    created_at = Column(DateTime, default=datetime.now)
->>>>>>> main
     
     documents = relationship("Document", back_populates="owner")
     qa_histories = relationship("QAHistory", back_populates="user")
@@ -52,24 +47,20 @@ class User(Base):
 class Document(Base):
     __tablename__ = "documents"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     original_filename = Column(String(255))
     stored_path = Column(String(255))
     milvus_collection_name = Column(String(100))
-<<<<<<< HEAD
     is_delete = Column(Boolean, default=False)
     uploaded_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-=======
-    uploaded_at = Column(DateTime, default=datetime.now)
->>>>>>> main
     
     owner = relationship("User", back_populates="documents")
 
 class QAHistory(Base):
     __tablename__ = "qa_history"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     question = Column(Text)
     answer = Column(Text)
     asked_at = Column(DateTime, default=datetime.now)

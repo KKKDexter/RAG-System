@@ -5,7 +5,7 @@ from logger_config import get_logger
 
 logger = get_logger("llm_service")
 
-class LLMServive:
+class LLMService:
     @staticmethod
     def create_llm_model(db: Session, llm_model: LLMModelCreate):
         """创建新的大模型配置"""

@@ -82,6 +82,7 @@ class LLMModelOut(BaseModel):
     is_delete: bool
     created_at: datetime
     updated_at: datetime
+    # 注意：api_key出于安全考虑不在输出中暴露
     
     model_config = ConfigDict(from_attributes=True)
 
